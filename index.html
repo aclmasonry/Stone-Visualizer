@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stone Visualizer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="main-container">
+    <!-- Top Toolbar -->
+    <div class="top-toolbar">
+        <div class="toolbar-section">
+            <button id="add-area-btn" class="toolbar-btn active" title="Add Area">
+                <span class="toolbar-icon">▢</span>
+                <span class="toolbar-label">Add Area</span>
+            </button>
+            <button id="subtract-area-btn" class="toolbar-btn" title="Subtract Area">
+                <span class="toolbar-icon">▣</span>
+                <span class="toolbar-label">Subtract</span>
+            </button>
+            <button id="add-depth-edge-btn" class="toolbar-btn" title="Add Depth Edge">
+                <span class="toolbar-icon">╱</span>
+                <span class="toolbar-label">Depth Edge</span>
+            </button>
+            <button id="add-depth-area-btn" class="toolbar-btn" title="Add Depth Area">
+                <span class="toolbar-icon">▨</span>
+                <span class="toolbar-label">Depth Area</span>
+            </button>
+    
+        </div>
+        
+        <div class="toolbar-divider"></div>
+        
+        <div class="toolbar-section">
+            <button id="undo-btn" class="toolbar-btn" title="Undo (Ctrl+Z)">
+                <span class="toolbar-icon">↶</span>
+                <span class="toolbar-label">Undo</span>
+            </button>
+            <button id="redo-btn" class="toolbar-btn" title="Redo (Ctrl+Y)">
+                <span class="toolbar-icon">↷</span>
+                <span class="toolbar-label">Redo</span>
+            </button>
+            <button id="copy-btn" class="toolbar-btn" title="Copy (Ctrl+C)">
+                <span class="toolbar-icon">⎘</span>
+                <span class="toolbar-label">Copy</span>
+            </button>
+            <button id="paste-btn" class="toolbar-btn" title="Paste (Ctrl+V)">
+                <span class="toolbar-icon">⎗</span>
+                <span class="toolbar-label">Paste</span>
+            </button>
+            <button id="delete-btn" class="toolbar-btn" title="Delete (Del)">
+                <span class="toolbar-icon">🗑</span>
+                <span class="toolbar-label">Delete</span>
+            </button>
+        </div>
+        
+        <div class="toolbar-divider"></div>
+        
+        <div class="toolbar-section">
+            <button id="clear-btn" class="toolbar-btn" title="Clear All">
+                <span class="toolbar-icon">✕</span>
+                <span class="toolbar-label">Clear All</span>
+            </button>
+         
+        </div>
+        
+        <div class="toolbar-divider"></div>
+        
+        <!-- Texture Mode Controls -->
+<div class="toolbar-section">
+    <button id="stone-mode-btn" class="toolbar-btn texture-mode-btn active" title="Stone Linear Mode">
+        <span class="toolbar-icon">⬜</span>
+        <span class="toolbar-label">Linear</span>
+    </button>
+    <button id="brick-row-mode-btn" class="toolbar-btn texture-mode-btn" title="Brick Row Mode">
+        <span class="toolbar-icon">🏗️</span>
+        <span class="toolbar-label">Brick Row</span>
+    </button>
+    <button id="color-fill-mode-btn" class="toolbar-btn texture-mode-btn" title="Color Fill Mode">
+        <span class="toolbar-icon">🎨</span>
+        <span class="toolbar-label">Color</span>
+    </button>
+</div>
+        
+        <div class="toolbar-divider"></div>
+        
+        
+        
+        <!-- Drawing Tools -->
+        <div class="toolbar-section">
+            <button id="drawing-tools-btn" class="toolbar-btn" title="Drawing Tools">
+                <span class="toolbar-icon">✏️</span>
+                <span class="toolbar-label">Tools</span>
+            </button>
+          <div class="download-dropdown">
+    <button id="download-btn" class="toolbar-btn" title="Download Image">
+        <span class="toolbar-icon">⬇</span>
+        <span class="toolbar-label">Download</span>
+    </button>
+    <div id="download-options" class="download-options" role="menu" aria-hidden="true" style="position:absolute; z-index: 99999;">
+        <button id="download-small" data-size="small">Small (800px)</button>
+        <button id="download-medium" data-size="medium">Medium (1200px)</button>
+        <button id="download-large" data-size="large">Large (Original)</button>
+    </div>
+</div>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <!-- Left Control Panel -->
+        <div class="control-panel">
+            <!-- House Selection Dropdown -->
+            <div class="control-section">
+                <h3>House Selection</h3>
+                <div class="house-selection">
+                    <select id="house-select" class="house-dropdown">
+            <option value="./Images/Canvas Images/Accent Room.jpg">Accent Room</option>
+            <option value="./Images/Canvas Images/Brick Wall Interior.jpg">Brick Wall Interior</option>
+            <option value="./Images/Canvas Images/Canvas-house-1.jpg" selected>Canvas House 1</option>
+            <option value="./Images/Canvas Images/Contemporary Lounge.jpg">Contemporary Lounge</option>
+            <option value="./Images/Canvas Images/Cozy Living Room.jpg">Cozy Living Room</option>
+            <option value="./Images/Canvas Images/Craftsman Triple Garage Home.jpg">Craftsman Triple Garage Home</option>
+            <option value="./Images/Canvas Images/Estate Manor.jpg">Estate Manor</option>
+            <option value="./Images/Canvas Images/Family Room Setup.jpg">Family Room Setup</option>
+            <option value="./Images/Canvas Images/Gabled Cottage.jpg">Gabled Cottage</option>
+            <option value="./Images/Canvas Images/Industrial Desk Setup.jpg">Industrial Desk Setup</option>
+            <option value="./Images/Canvas Images/Loft Studio Office.jpg">Loft Studio Office</option>
+            <option value="./Images/Canvas Images/Loft Workspace.jpg">Loft Workspace</option>
+            <option value="./Images/Canvas Images/Modern Accent Office.jpg">Modern Accent Office</option>
+            <option value="./Images/Canvas Images/Modern Living Room.jpg">Modern Living Room</option>
+            <option value="./Images/Canvas Images/Modern Lodge with Stream Feature.jpg">Modern Lodge with Stream Feature</option>
+            <option value="./mages/Canvas Images/Modern-White-Corner.jpg">Modern White Corner</option>
+        </select>
+                    <div class="upload-buttons">
+    <button id="upload-house-btn" class="upload-btn">Upload House</button>
+</div>
+                </div>
+                <input type="file" id="house-upload" accept="image/*" style="display: none;">
+            </div>
+            <!-- Presets Section -->
+            <div class="control-section">
+                <h3>Saved Presets</h3>
+                <div class="presets-section">
+                    <div class="preset-controls">
+                        <button id="save-preset-btn" class="preset-control-btn save-preset" title="Save current mappings as a named preset">
+                            <span class="preset-icon">💾</span>
+                            Save Preset
+                        </button>
+                    </div>
+                    <div id="presets-list" class="presets-list">
+                        <div class="empty-state">No presets saved for this house</div>
+                    </div>
+                    <div class="preset-info-text">
+                        <small>💡 Your mapped areas are automatically saved when you switch houses or reload the page.</small>
+                    </div>
+                </div>
+            </div>
+            <!-- Areas List -->
+            <div class="control-section">
+                <h3>Areas & Elements</h3>
+                <div id="areas-list" class="areas-list">
+                    <div class="empty-state">No areas defined yet</div>
+                </div>
+                <div id="depth-list" class="areas-list" style="margin-top: 10px; display: none;">
+                </div>
+                <div id="sills-list" class="areas-list" style="margin-top: 10px; display: none;">
+                </div>
+                <div id="brick-rows-list" class="areas-list" style="margin-top: 10px; display: none;">
+                </div>
+                <div id="decorations-list" class="areas-list" style="margin-top: 10px; display: none;">
+                </div>
+              <div id="accents-list" class="areas-list" style="margin-top: 10px; display: none;">
+</div>
+            </div>
+            
+            <!-- Adjustments Panel -->
+            <div class="control-section collapsible">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>Adjustments</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="adjustment-group">
+                        <label>Scale: <span id="scale-value">150%</span></label>
+                        <input type="range" id="scale-slider" min="10" max="1000" value="150">
+                    </div>
+                    <div class="adjustment-group">
+                        <label>Rotation: <span id="rotation-value">0°</span></label>
+                        <input type="range" id="rotation-slider" min="0" max="359" value="180">
+                    </div>
+                    <div class="adjustment-group">
+                        <label>Brightness: <span id="brightness-value">100%</span></label>
+                        <input type="range" id="brightness-slider" min="50" max="150" value="100">
+                    </div>
+                    <div class="adjustment-group">
+                        <label>Shadow: <span id="shadow-value">0%</span></label>
+                        <input type="range" id="shadow-slider" min="0" max="100" value="0">
+                    </div>
+                    <details class="advanced-controls">
+                        <summary>Advanced Options</summary>
+                        <div class="adjustment-group">
+                            <label>Horizontal: <span id="horizontal-value">0px</span></label>
+                            <input type="range" id="horizontal-slider" min="-200" max="200" value="0">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Vertical: <span id="vertical-value">0px</span></label>
+                            <input type="range" id="vertical-slider" min="-200" max="200" value="0">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Contrast: <span id="contrast-value">100%</span></label>
+                            <input type="range" id="contrast-slider" min="50" max="150" value="100">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>3D Angle: <span id="angle-3d-value">0°</span></label>
+                            <input type="range" id="angle-3d-slider" min="-60" max="60" value="0">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Perspective: <span id="perspective-angle-value">0°</span></label>
+                            <input type="range" id="perspective-angle-slider" min="-45" max="45" value="0">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Perspective Compression: <span id="perspective-compression-value">0%</span></label>
+                            <input type="range" id="perspective-compression-slider" min="-100" max="100" value="0">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Depth: <span id="edge-protrusion-value">0px</span></label>
+                            <input type="range" id="edge-protrusion-slider" min="-20" max="20" value="0">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Shadow Opacity: <span id="shadow-opacity-value">40%</span></label>
+                            <input type="range" id="shadow-opacity-slider" min="0" max="100" value="40">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Shadow Offset: <span id="shadow-offset-value">5px</span></label>
+                            <input type="range" id="shadow-offset-slider" min="0" max="15" value="5">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Shadow Blur: <span id="shadow-blur-value">3px</span></label>
+                            <input type="range" id="shadow-blur-slider" min="0" max="10" value="3">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Depth Intensity: <span id="depth-intensity-value">20px</span></label>
+                            <input type="range" id="depth-intensity-slider" min="5" max="50" value="20">
+                        </div>
+                        <div class="adjustment-group">
+                            <label>Depth Perspective: <span id="depth-perspective-value">0%</span></label>
+                            <input type="range" id="depth-perspective-slider" min="0" max="100" value="0">
+                        </div>
+                      <div class="adjustment-group" style="margin-top: 15px;">
+    
+                    </details>
+                </div>
+            </div>
+            <div style="padding: 15px; border-top: 1px solid #eee;">
+                <button id="save-areas-btn" class="small-btn" style="width: 100%;">
+                    💾 Save as JSON
+                </button>
+            </div>
+            
+           <!-- FIND the Brick Controls section in your HTML (around line 184-217) -->
+<!-- REPLACE the entire brick controls section with this enhanced version: -->
+
+<!-- Brick Controls -->
+<div class="control-section collapsible" id="brick-controls" style="display: none;">
+    <div class="section-header" onclick="toggleSection(this)">
+        <h3>Brick Settings</h3>
+        <span class="toggle-icon">▼</span>
+    </div>
+    <div class="section-content">
+        <div class="adjustment-group">
+            <label>Pattern:</label>
+            <select id="brick-pattern-select">
+                <option value="running" selected>Running Bond</option>
+                <option value="soldier">Soldier Course</option>
+                <option value="rowlock">Rowlock</option>
+                <option value="header">Header Course</option>
+            </select>
+        </div>
+        <!-- Add this right after your brick pattern selector in the brick controls section -->
+<div class="adjustment-group">
+    <label>Texture:</label>
+    <select id="brick-texture-select">
+    <option value="smooth">Smooth</option>
+    <option value="coated">Coated</option>
+    <option value="matte">Matte</option>
+    <option value="antique">Antique</option>
+    <option value="ruff">Ruff</option>
+    <option value="scratch">Scratch</option>
+</select>
+</div>
+
+<!-- Add texture upload capability -->
+<div class="adjustment-group">
+    <label>Upload Custom Texture:</label>
+    <input type="file" id="texture-upload" accept="image/*" style="width: 100%; padding: 5px;">
+    <small style="color: #666;">Upload your own brick texture image</small>
+</div>
+
+<!-- Add texture blend control -->
+<div class="adjustment-group">
+    <label>Texture Intensity: <span id="texture-intensity-value">100%</span></label>
+    <input type="range" id="texture-intensity-slider" min="0" max="100" value="100">
+</div>
+
+<!-- ADD this right after your texture intensity slider in the brick controls -->
+<div class="adjustment-group">
+    <label>Texture Contrast: <span id="texture-contrast-value">100%</span></label>
+    <input type="range" id="texture-contrast-slider" min="50" max="200" value="100">
+</div>
+
+<!-- ADD this right after your texture contrast slider in the brick controls -->
+<div class="adjustment-group">
+    <label>Texture Scale: <span id="texture-scale-value">100%</span></label>
+    <input type="range" id="texture-scale-slider" min="10" max="500" value="100">
+    <small style="color: #666;">Adjust texture detail size</small>
+</div>
+        <div class="adjustment-group">
+            <label>Color:</label>
+            <select id="brick-color-select">
+                <option value="red3" selected>Red Dark</option>
+                <option value="red1">Red Classic</option>
+                <option value="red2">Red Rustic</option>
+                <option value="red4">Red Used</option>
+                <option value="brown1">Brown Earth</option>
+                <option value="brown2">Brown Mocha</option>
+                <option value="black1">Black Charcoal</option>
+                <option value="black2">Black Soot</option>
+                <option value="white1">White Cream</option>
+                <option value="white2">White Antique</option>
+                <option value="custom">Custom Color</option>
+            </select>
+        </div>
+        <div class="adjustment-group" id="custom-brick-color-group" style="display: none;">
+            <label>Custom Brick Color:</label>
+            <input type="color" id="custom-brick-color-picker" value="#AD4F4F">
+        </div>
+       
+        <div class="adjustment-group">
+    <label>Mortar:</label>
+    <select id="brick-mortar-color-select">
+        <option value="#696969" selected>Dark Grey</option>
+        <option value="#8B8B8B">Standard Grey</option>
+        <option value="#36454F">Charcoal</option>
+        <option value="#000000">Black</option>
+        <option value="#D2B48C">Tan</option>
+        <option value="#FFFFFF">White</option>
+        <option value="custom">Custom Color</option>
+    </select>
+</div>
+<div class="adjustment-group" id="custom-mortar-color-group" style="display: none;">
+    <label>Custom Mortar Color:</label>
+    <input type="color" id="custom-mortar-color-picker" value="#696969">
+</div>
+        <div class="adjustment-group">
+            <label>Row Height: <span id="brick-row-height-value">40px</span></label>
+            <input type="range" id="brick-row-height-slider" min="20" max="120" value="40">
+        </div>
+        <div class="adjustment-group">
+            <label>Mortar Joint Width: <span id="brick-mortar-thickness-value">2px</span></label>
+            <input type="range" id="brick-mortar-thickness-slider" min="1" max="10" value="2">
+        </div>
+    </div>
+</div>
+
+<!-- Color Fill Controls -->
+<div class="control-section collapsible" id="color-fill-controls" style="display: none;">
+    <div class="section-header" onclick="toggleSection(this)">
+        <h3>Color Fill Settings</h3>
+        <span class="toggle-icon">▼</span>
+    </div>
+    <div class="section-content">
+        <div class="adjustment-group">
+            <label>Fill Color:</label>
+            <input type="color" id="color-fill-picker" value="#A0A0A0">
+        </div>
+        <div class="adjustment-group">
+            <label>Opacity: <span id="color-fill-opacity-value">100%</span></label>
+            <input type="range" id="color-fill-opacity-slider" min="10" max="100" value="100">
+        </div>
+    </div>
+</div>
+            
+            <!-- Decoration Controls -->
+            <div class="control-section collapsible" id="decoration-controls" style="display: none;">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>Decoration Settings</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="adjustment-group">
+                        <label>Opacity: <span id="decoration-opacity-value">100%</span></label>
+                        <input type="range" id="decoration-opacity-slider" min="0" max="100" value="100">
+                    </div>
+                    <div class="button-group">
+                        <button id="decoration-bring-front" class="small-btn">Bring Front</button>
+                        <button id="decoration-send-back" class="small-btn">Send Back</button>
+                    </div>
+                    <div style="margin-top: 10px; padding: 8px; background: #f0f0f0; border-radius: 4px; font-size: 11px; color: #666;">
+                        💡 Drag corner handles to resize decoration
+                    </div>
+                </div>
+            </div>
+              <!-- STEP 1: Find the line that contains "</div>" after "Decoration Settings" section (around line 380) -->
+<!-- ADD this new section IMMEDIATELY AFTER that closing div: -->
+
+            <!-- Accent Controls -->
+            <div class="control-section collapsible" id="accent-controls" style="display: none;">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>Strip Flashing Settings</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="adjustment-group">
+                        <label>Thickness: <span id="accent-thickness-value">2px</span></label>
+                        <input type="range" id="accent-thickness-slider" min="1" max="40" value="2">
+                    </div>
+                    <div class="adjustment-group">
+                        <label>Color:</label>
+                        <input type="color" id="accent-color-picker" value="#808080">
+                    </div>
+                    <div class="adjustment-group">
+                        <label>Opacity: <span id="accent-opacity-value">100%</span></label>
+                        <input type="range" id="accent-opacity-slider" min="0" max="100" value="100">
+                    </div>
+                    <div class="adjustment-group">
+                        <label>Shadow Opacity: <span id="accent-shadow-opacity-value">40%</span></label>
+                        <input type="range" id="accent-shadow-opacity-slider" min="0" max="100" value="40">
+                    </div>
+                    <div class="adjustment-group">
+                        <label>Shadow Offset: <span id="accent-shadow-offset-value">2px</span></label>
+                        <input type="range" id="accent-shadow-offset-slider" min="0" max="10" value="2">
+                    </div>
+                    <div class="adjustment-group">
+                        <label>Shadow Blur: <span id="accent-shadow-blur-value">3px</span></label>
+                        <input type="range" id="accent-shadow-blur-slider" min="0" max="10" value="3">
+                    </div>
+                  <div class="button-group">
+                        <button id="accent-bring-front" class="small-btn">Bring Front</button>
+                        <button id="accent-send-back" class="small-btn">Send Back</button>
+                    </div>
+                    <div style="margin-top: 10px; padding: 8px; background: #f0f0f0; border-radius: 4px; font-size: 11px; color: #666;">
+                        💡 Use layer controls to move strip flashing above or below other elements
+                    </div>
+                </div>
+            </div>
+              
+        </div>
+
+        <!-- Main Canvas Area -->
+        <div class="main-area">
+            <div id="canvas-container">
+                <canvas id="main-canvas" width="1600" height="960"></canvas>
+                <canvas id="drawing-canvas" width="1600" height="960"></canvas>
+                <div id="message" class="message">Click to start drawing an area</div>
+                
+                <!-- Floating Drawing Tools Palette -->
+<div id="drawing-tools-palette" class="drawing-tools-palette hidden">
+    <div class="tools-header">
+        <span>Tools</span>
+        <button id="close-tools-btn" class="close-tools-btn">×</button>
+    </div>
+    <div class="tools-grid">
+        <button class="tool-btn active" data-tool="pointer" title="Pointer">
+            <span class="tool-icon">↖</span>
+        </button>
+        <button class="tool-btn" data-tool="pen" title="Pen">
+            <span class="tool-icon">✏️</span>
+        </button>
+        <button class="tool-btn" data-tool="line" title="Line">
+            <span class="tool-icon">📏</span>
+        </button>
+        <button class="tool-btn" data-tool="arrow" title="Arrow">
+            <span class="tool-icon">↗</span>
+        </button>
+        <button class="tool-btn" data-tool="circle" title="Circle">
+            <span class="tool-icon">⭕</span>
+        </button>
+        <button class="tool-btn" data-tool="rectangle" title="Rectangle">
+            <span class="tool-icon">⬜</span>
+        </button>
+        <button class="tool-btn" data-tool="text" title="Text">
+            <span class="tool-icon">T</span>
+        </button>
+    </div>
+    <div class="tools-controls">
+        <div class="color-picker">
+            <input type="color" id="drawing-color" value="#ff0000">
+            <label for="drawing-color">Color</label>
+        </div>
+        <div class="stroke-width">
+            <input type="range" id="stroke-width" min="0.5" max="40" value="2" step="0.5">
+            <label for="stroke-width">Width</label>
+        </div>
+        <div class="font-size-control">
+            <input type="range" id="font-size" min="10" max="48" value="16">
+            <label for="font-size">Font Size</label>
+        </div>
+        <button id="clear-drawings-btn" class="clear-drawings-btn">Clear All</button>
+        <button id="delete-selected-btn" class="delete-selected-btn">Delete Selected</button>
+    </div>
+</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Material Selection Panel -->
+    <div class="material-selection-panel">
+        <div class="material-tabs">
+            <button class="material-tab active" data-category="stone">Stone</button>
+<button class="material-tab" data-category="thin-brick">Thin Brick</button>
+<button class="material-tab" data-category="full-brick">Full Brick</button>
+<button class="material-tab" data-category="stone-concrete-surfaces">Stone & Concrete Surfaces</button>
+<button class="material-tab" data-category="wood-surfaces">Wood Surfaces</button>
+<button class="material-tab" data-category="accents">Accents</button>
+<button class="material-tab" data-category="decor">Decor</button>
+        </div>
+        
+        <div class="material-content">
+            <!-- Stone Selection -->
+            <div class="material-category active" id="stone-category">
+                <!-- Manufacturer Selector with Filter Search -->
+                <div class="manufacturer-selector">
+                    <div class="manufacturer-controls">
+                        <select id="manufacturer-select" class="manufacturer-dropdown">
+    <option value="eldorado-stone" selected>Eldorado Stone</option>
+    <option value="casa-di-sassi">Casa Di Sassi</option>
+    <option value="dutch-quality">Dutch Quality</option>
+    <option value="rocky-mountain-stoneworks">Rocky Mountain Stoneworks</option>
+</select>
+                        <button id="filter-search-btn" class="filter-search-btn">
+                            <span class="filter-icon">🔍</span>
+                            Filter
+                        </button>
+                    </div>
+                    
+                    <!-- Hidden Filter Panel -->
+                    <div id="filter-panel" class="filter-panel hidden">
+                        <div class="filter-controls">
+                            <button id="clear-filters-btn" class="clear-filters-btn">Clear All Filters</button>
+                            <div class="active-filters" id="active-filters"></div>
+                            
+                            <div class="filter-group">
+                                <label>Stone Type</label>
+                                <select class="filter-select" data-filter="Stone Type">
+                                    <option value="">All Types</option>
+                                </select>
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>Color</label>
+                                <select class="filter-select" data-filter="Color">
+                                    <option value="">All Colors</option>
+                                </select>
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>Regional Style</label>
+                                <select class="filter-select" data-filter="Regional Style">
+                                    <option value="">All Styles</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- All Profiles View (default) -->
+                <div id="all-profiles-view" class="all-profiles-view active">
+                    <!-- Eldorado Stone Section -->
+                    <div class="manufacturer-section" data-manufacturer="eldorado-stone">
+                        <h3 class="manufacturer-section-title">Eldorado Stone</h3>
+                        
+                        <!-- Bluffstone Profile -->
+                        <div class="profile-section" data-profile="bluffstone">
+                            <h4 class="profile-section-title">Bluffstone</h4>
+                            <div class="profile-colors" id="eldorado-bluffstone-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Cliffstone Profile -->
+                        <div class="profile-section" data-profile="cliffstone">
+                            <h4 class="profile-section-title">Cliffstone</h4>
+                            <div class="profile-colors" id="eldorado-cliffstone-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Coastal Reef Profile -->
+                        <div class="profile-section" data-profile="coastal-reef">
+                            <h4 class="profile-section-title">Coastal Reef</h4>
+                            <div class="profile-colors" id="eldorado-coastal-reef-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Country Rubble Profile -->
+                        <div class="profile-section" data-profile="country-rubble">
+                            <h4 class="profile-section-title">Country Rubble</h4>
+                            <div class="profile-colors" id="eldorado-country-rubble-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- NEW: Cypress Ridge Profile -->
+                        <div class="profile-section" data-profile="cypress-ridge">
+                            <h4 class="profile-section-title">Cypress Ridge</h4>
+                            <div class="profile-colors" id="eldorado-cypress-ridge-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- NEW: European Ledge Profile -->
+                        <div class="profile-section" data-profile="european-ledge">
+                            <h4 class="profile-section-title">European Ledge</h4>
+                            <div class="profile-colors" id="eldorado-european-ledge-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- NEW: Fieldledge Profile -->
+                        <div class="profile-section" data-profile="fieldledge">
+                            <h4 class="profile-section-title">Fieldledge</h4>
+                            <div class="profile-colors" id="eldorado-fieldledge-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- NEW: Limestone Profile -->
+                        <div class="profile-section" data-profile="limestone">
+                            <h4 class="profile-section-title">Limestone</h4>
+                            <div class="profile-colors" id="eldorado-limestone-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- NEW: Mountain Ledge Profile -->
+                        <div class="profile-section" data-profile="mountain-ledge">
+                            <h4 class="profile-section-title">Mountain Ledge</h4>
+                            <div class="profile-colors" id="eldorado-mountain-ledge-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- NEW: River Rock Profile -->
+                        <div class="profile-section" data-profile="river-rock">
+                            <h4 class="profile-section-title">River Rock</h4>
+                            <div class="profile-colors" id="eldorado-river-rock-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- NEW: Roughcut Profile -->
+                        <div class="profile-section" data-profile="roughcut">
+                            <h4 class="profile-section-title">Roughcut</h4>
+                            <div class="profile-colors" id="eldorado-roughcut-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- NEW: Stacked Stone Profile -->
+                        <div class="profile-section" data-profile="stacked-stone">
+                            <h4 class="profile-section-title">Stacked Stone</h4>
+                            <div class="profile-colors" id="eldorado-stacked-stone-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Casa Di Sassi Section -->
+                    <div class="manufacturer-section" data-manufacturer="casa-di-sassi">
+                        <h3 class="manufacturer-section-title">Casa Di Sassi</h3>
+                        
+                        <!-- Blend Profile -->
+                        <div class="profile-section" data-profile="casa-blend">
+                            <h4 class="profile-section-title">Blend</h4>
+                            <div class="profile-colors" id="casa-blend-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Brick Profile -->
+                        <div class="profile-section" data-profile="casa-brick">
+                            <h4 class="profile-section-title">Brick</h4>
+                            <div class="profile-colors" id="casa-brick-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Country Rubble Profile -->
+                        <div class="profile-section" data-profile="casa-country-rubble">
+                            <h4 class="profile-section-title">Country Rubble</h4>
+                            <div class="profile-colors" id="casa-country-rubble-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- EZ Ledge Profile -->
+                        <div class="profile-section" data-profile="ez-ledge">
+                            <h4 class="profile-section-title">EZ Ledge</h4>
+                            <div class="profile-colors" id="casa-ez-ledge-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Fieldstone Profile -->
+                        <div class="profile-section" data-profile="casa-fieldstone">
+                            <h4 class="profile-section-title">Fieldstone</h4>
+                            <div class="profile-colors" id="casa-fieldstone-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Kwik Stack Profile -->
+                        <div class="profile-section" data-profile="casa-kwik-stack">
+                            <h4 class="profile-section-title">Kwik Stack</h4>
+                            <div class="profile-colors" id="casa-kwik-stack-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Ledgestone Profile -->
+                        <div class="profile-section" data-profile="casa-ledgestone">
+                            <h4 class="profile-section-title">Ledgestone</h4>
+                            <div class="profile-colors" id="casa-ledgestone-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Old World Profile -->
+                        <div class="profile-section" data-profile="casa-old-world">
+                            <h4 class="profile-section-title">Old World</h4>
+                            <div class="profile-colors" id="casa-old-world-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Quartz Ledgestone Profile -->
+                        <div class="profile-section" data-profile="casa-quartz-ledgestone">
+                            <h4 class="profile-section-title">Quartz Ledgestone</h4>
+                            <div class="profile-colors" id="casa-quartz-ledgestone-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Viso Limestone Profile -->
+                        <div class="profile-section" data-profile="casa-viso-limestone">
+                            <h4 class="profile-section-title">Viso Limestone</h4>
+                            <div class="profile-colors" id="casa-viso-limestone-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Volterra Profile -->
+                        <div class="profile-section" data-profile="volterra">
+                            <h4 class="profile-section-title">Volterra</h4>
+                            <div class="profile-colors" id="casa-volterra-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Yorkshire Profile -->
+                        <div class="profile-section" data-profile="casa-yorkshire">
+                            <h4 class="profile-section-title">Yorkshire</h4>
+                            <div class="profile-colors" id="casa-yorkshire-colors">
+                                <!-- Colors will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Individual Manufacturer Views -->
+                <div id="eldorado-stone-view" class="manufacturer-view">
+                    <div class="profile-selector">
+                        <div class="profile-tabs">
+                            <button class="profile-tab active" data-profile="all">All Profiles</button>
+                            <button class="profile-tab" data-profile="bluffstone">Bluffstone</button>
+                            <button class="profile-tab" data-profile="cliffstone">Cliffstone</button>
+                            <button class="profile-tab" data-profile="coastal-reef">Coastal Reef</button>
+                            <button class="profile-tab" data-profile="country-rubble">Country Rubble</button>
+                            <!-- NEW: Cypress Ridge Tab -->
+                            <button class="profile-tab" data-profile="cypress-ridge">Cypress Ridge</button>
+                            <!-- NEW: European Ledge Tab -->
+                            <button class="profile-tab" data-profile="european-ledge">European Ledge</button>
+                            <!-- NEW: Fieldledge Tab -->
+                            <button class="profile-tab" data-profile="fieldledge">Fieldledge</button>
+                            <!-- NEW: Limestone Tab -->
+                            <button class="profile-tab" data-profile="limestone">Limestone</button>
+                            <!-- NEW: Mountain Ledge Tab -->
+                            <button class="profile-tab" data-profile="mountain-ledge">Mountain Ledge</button>
+                            <!-- NEW: River Rock Tab -->
+                            <button class="profile-tab" data-profile="river-rock">River Rock</button>
+                            <!-- NEW: Roughcut Tab -->
+                            <button class="profile-tab" data-profile="roughcut">Roughcut</button>
+                            <!-- NEW: Stacked Stone Tab -->
+                            <button class="profile-tab" data-profile="stacked-stone">Stacked Stone</button>
+                        </div>
+                    </div>
+                    <div class="material-grid-container">
+                        <div class="material-grid" id="eldorado-all-grid">
+                            <!-- All Eldorado stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="eldorado-bluffstone-grid" data-profile="bluffstone">
+                            <!-- Bluffstone stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="eldorado-cliffstone-grid" data-profile="cliffstone">
+                            <!-- Cliffstone stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="eldorado-coastal-reef-grid" data-profile="coastal-reef">
+                            <!-- Coastal Reef stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="eldorado-country-rubble-grid" data-profile="country-rubble">
+                            <!-- Country Rubble stones will be populated by JavaScript -->
+                        </div>
+                        <!-- NEW: Cypress Ridge Grid -->
+                        <div class="profile-group" id="eldorado-cypress-ridge-grid" data-profile="cypress-ridge">
+                            <!-- Cypress Ridge stones will be populated by JavaScript -->
+                        </div>
+                        <!-- NEW: European Ledge Grid -->
+                        <div class="profile-group" id="eldorado-european-ledge-grid" data-profile="european-ledge">
+                            <!-- European Ledge stones will be populated by JavaScript -->
+                        </div>
+                        <!-- NEW: Fieldledge Grid -->
+                        <div class="profile-group" id="eldorado-fieldledge-grid" data-profile="fieldledge">
+                            <!-- Fieldledge stones will be populated by JavaScript -->
+                        </div>
+                        <!-- NEW: Limestone Grid -->
+                        <div class="profile-group" id="eldorado-limestone-grid" data-profile="limestone">
+                            <!-- Limestone stones will be populated by JavaScript -->
+                        </div>
+                        <!-- NEW: Mountain Ledge Grid -->
+                        <div class="profile-group" id="eldorado-mountain-ledge-grid" data-profile="mountain-ledge">
+                            <!-- Mountain Ledge stones will be populated by JavaScript -->
+                        </div>
+                        <!-- NEW: River Rock Grid -->
+                        <div class="profile-group" id="eldorado-river-rock-grid" data-profile="river-rock">
+                            <!-- River Rock stones will be populated by JavaScript -->
+                        </div>
+                        <!-- NEW: Roughcut Grid -->
+                        <div class="profile-group" id="eldorado-roughcut-grid" data-profile="roughcut">
+                            <!-- Roughcut stones will be populated by JavaScript -->
+                        </div>
+                        <!-- NEW: Stacked Stone Grid -->
+                        <div class="profile-group" id="eldorado-stacked-stone-grid" data-profile="stacked-stone">
+                            <!-- Stacked Stone stones will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <div id="casa-di-sassi-view" class="manufacturer-view">
+                    <div class="profile-selector">
+                        <div class="profile-tabs">
+                            <button class="profile-tab active" data-profile="all">All Profiles</button>
+                            <button class="profile-tab" data-profile="casa-blend">Blend</button>
+                            <button class="profile-tab" data-profile="casa-brick">Brick</button>
+                            <button class="profile-tab" data-profile="casa-country-rubble">Country Rubble</button>
+                            <button class="profile-tab" data-profile="ez-ledge">EZ Ledge</button>
+                            <button class="profile-tab" data-profile="casa-fieldstone">Fieldstone</button>
+                            <button class="profile-tab" data-profile="casa-kwik-stack">Kwik Stack</button>
+                            <button class="profile-tab" data-profile="casa-ledgestone">Ledgestone</button>
+                            <button class="profile-tab" data-profile="casa-old-world">Old World</button>
+                            <button class="profile-tab" data-profile="casa-quartz-ledgestone">Quartz Ledgestone</button>
+                            <button class="profile-tab" data-profile="casa-viso-limestone">Viso Limestone</button>
+                            <button class="profile-tab" data-profile="volterra">Volterra</button>
+                            <button class="profile-tab" data-profile="casa-yorkshire">Yorkshire</button>
+                        </div>
+                    </div>
+                    <div class="material-grid-container">
+                        <div class="material-grid" id="casa-all-grid">
+                            <!-- All Casa Di Sassi stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-blend-grid" data-profile="casa-blend">
+                            <!-- Blend stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-brick-grid" data-profile="casa-brick">
+                            <!-- Brick stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-country-rubble-grid" data-profile="casa-country-rubble">
+                            <!-- Country Rubble stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-ez-ledge-grid" data-profile="ez-ledge">
+                            <!-- EZ Ledge stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-fieldstone-grid" data-profile="casa-fieldstone">
+                            <!-- Fieldstone stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-kwik-stack-grid" data-profile="casa-kwik-stack">
+                            <!-- Kwik Stack stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-ledgestone-grid" data-profile="casa-ledgestone">
+                            <!-- Ledgestone stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-old-world-grid" data-profile="casa-old-world">
+                            <!-- Old World stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-quartz-ledgestone-grid" data-profile="casa-quartz-ledgestone">
+                            <!-- Quartz Ledgestone stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-viso-limestone-grid" data-profile="casa-viso-limestone">
+                            <!-- Viso Limestone stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-volterra-grid" data-profile="volterra">
+                            <!-- Volterra stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="casa-yorkshire-grid" data-profile="casa-yorkshire">
+                            <!-- Yorkshire stones will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ADD THESE NEW MANUFACTURERS RIGHT HERE -->
+                
+                <!-- Dutch Quality View -->
+                <div id="dutch-quality-view" class="manufacturer-view">
+                    <div class="profile-selector">
+                        <div class="profile-tabs">
+                            <button class="profile-tab active" data-profile="all">All Profiles</button>
+                            <button class="profile-tab" data-profile="dry-stack">Dry Stack</button>
+                            <button class="profile-tab" data-profile="fieldstone">Fieldstone</button>
+                            <button class="profile-tab" data-profile="ledgestone">Ledgestone</button>
+                            <button class="profile-tab" data-profile="limestone">Limestone</button>
+                            <button class="profile-tab" data-profile="stack-ledge">Stack Ledge</button>
+                            <button class="profile-tab" data-profile="tuscan-ridge">Tuscan Ridge</button>
+                            <button class="profile-tab" data-profile="weather-ledge">Weather Ledge</button>
+                            <button class="profile-tab" data-profile="weathered-plank">Weathered Plank</button>
+                        </div>
+                    </div>
+                    <div class="material-grid-container">
+                        <div class="material-grid" id="dutch-quality-all-grid">
+                            <!-- All Dutch Quality stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="dutch-quality-dry-stack-grid" data-profile="dry-stack">
+                            <!-- Dry Stack stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="dutch-quality-fieldstone-grid" data-profile="fieldstone">
+                            <!-- Fieldstone stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="dutch-quality-ledgestone-grid" data-profile="ledgestone">
+                            <!-- Ledgestone stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="dutch-quality-limestone-grid" data-profile="limestone">
+                            <!-- Limestone stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="dutch-quality-stack-ledge-grid" data-profile="stack-ledge">
+                            <!-- Stack Ledge stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="dutch-quality-tuscan-ridge-grid" data-profile="tuscan-ridge">
+                            <!-- Tuscan Ridge stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="dutch-quality-weather-ledge-grid" data-profile="weather-ledge">
+                            <!-- Weather Ledge stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="dutch-quality-weathered-plank-grid" data-profile="weathered-plank">
+                            <!-- Weathered Plank stones will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rocky Mountain Stoneworks View -->
+                <div id="rocky-mountain-stoneworks-view" class="manufacturer-view">
+                    <div class="profile-selector">
+                        <div class="profile-tabs">
+                            <button class="profile-tab active" data-profile="all">All Profiles</button>
+                            <button class="profile-tab" data-profile="prostack">Prostack</button>
+                            <button class="profile-tab" data-profile="random-ledge">Random Ledge</button>
+                        </div>
+                    </div>
+                    <div class="material-grid-container">
+                        <div class="material-grid" id="rocky-mountain-all-grid">
+                            <!-- All Rocky Mountain stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="rocky-mountain-prostack-grid" data-profile="prostack">
+                            <!-- Prostack stones will be populated by JavaScript -->
+                        </div>
+                        <div class="profile-group" id="rocky-mountain-random-ledge-grid" data-profile="random-ledge">
+                            <!-- Random Ledge stones will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+    
+                <!-- Upload Section -->
+                <div class="material-grid" id="stone-upload-section">
+                    <div class="material-item upload-material" data-type="stone">
+                        <div class="upload-icon">+</div>
+                        <span>Upload</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Thin Brick Selection -->
+<div class="material-category" id="thin-brick-category">
+    <div class="manufacturer-selector">
+        <div class="manufacturer-controls">
+            <select id="thin-brick-manufacturer-select" class="manufacturer-dropdown">
+                <option value="interstate-brick" selected>Interstate</option>
+                <option value="hebron-brick">Hebron</option>
+                <option value="glen-gery">Glen-Gery</option>
+                <option value="hc-muddox">H.C. Muddox</option>
+                <option value="endicott">Endicott</option>
+                <option value="dutch-quality-thin-brick">Dutch Quality</option>
+                <option value="king-klinker">King Klinker</option>
+            </select>
+        </div>
+    </div>
+<!-- Dutch Quality Thin Brick View -->
+    <div id="dutch-quality-thin-brick-view" class="manufacturer-view active">
+        <div class="profile-selector">
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-profile="all">All Profiles</button>
+                <button class="profile-tab" data-profile="handformed">Handformed</button>
+            </div>
+        </div>
+        <div class="material-grid-container">
+            <div class="material-grid" id="dutch-quality-thin-brick-all-grid">
+                <!-- All Dutch Quality thin bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="dutch-quality-thin-brick-handformed-grid" data-profile="handformed">
+                <!-- Handformed bricks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+    <!-- Endicott View -->
+    <div id="endicott-view" class="manufacturer-view">
+        <div class="profile-selector">
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-profile="all">All Profiles</button>
+                <button class="profile-tab" data-profile="smooth">Smooth</button>
+                <button class="profile-tab" data-profile="glazed">Glazed</button>
+                <button class="profile-tab" data-profile="heritage">Heritage</button>
+            </div>
+        </div>
+        <div class="material-grid-container">
+            <div class="material-grid" id="endicott-all-grid">
+                <!-- All Endicott bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="endicott-smooth-grid" data-profile="smooth">
+                <!-- Smooth bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="endicott-glazed-grid" data-profile="glazed">
+                <!-- Glazed bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="endicott-heritage-grid" data-profile="heritage">
+                <!-- Heritage bricks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Glen-Gery View -->
+    <div id="glen-gery-view" class="manufacturer-view">
+        <div class="profile-selector">
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-profile="all">All Profiles</button>
+                <button class="profile-tab" data-profile="standard">Standard</button>
+                <button class="profile-tab" data-profile="glazed">Glazed</button>
+                <button class="profile-tab" data-profile="wirecut">Wirecut</button>
+                <button class="profile-tab" data-profile="speckled">Speckled</button>
+            </div>
+        </div>
+        <div class="material-grid-container">
+            <div class="material-grid" id="glen-gery-all-grid">
+                <!-- All Glen-Gery bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="glen-gery-standard-grid" data-profile="standard">
+                <!-- Standard bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="glen-gery-glazed-grid" data-profile="glazed">
+                <!-- Glazed bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="glen-gery-wirecut-grid" data-profile="wirecut">
+                <!-- Wirecut bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="glen-gery-speckled-grid" data-profile="speckled">
+                <!-- Speckled bricks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Hebron Brick View -->
+    <div id="hebron-brick-view" class="manufacturer-view">
+        <div class="profile-selector">
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-profile="all">All Profiles</button>
+                <button class="profile-tab" data-profile="heritage">Heritage</button>
+                <button class="profile-tab" data-profile="standard">Standard</button>
+                <button class="profile-tab" data-profile="premium">Premium</button>
+                <button class="profile-tab" data-profile="traditional">Traditional</button>
+                <button class="profile-tab" data-profile="common">Common</button>
+                <button class="profile-tab" data-profile="featured">Featured</button>
+                <button class="profile-tab" data-profile="industrial">Industrial</button>
+                <button class="profile-tab" data-profile="rustic">Rustic</button>
+                <button class="profile-tab" data-profile="contemporary">Contemporary</button>
+            </div>
+        </div>
+        <div class="material-grid-container">
+            <div class="material-grid" id="hebron-brick-all-grid">
+                <!-- All Hebron bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hebron-brick-heritage-grid" data-profile="heritage">
+                <!-- Heritage bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hebron-brick-standard-grid" data-profile="standard">
+                <!-- Standard bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hebron-brick-premium-grid" data-profile="premium">
+                <!-- Premium bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hebron-brick-traditional-grid" data-profile="traditional">
+                <!-- Traditional bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hebron-brick-common-grid" data-profile="common">
+                <!-- Common bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hebron-brick-featured-grid" data-profile="featured">
+                <!-- Featured bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hebron-brick-industrial-grid" data-profile="industrial">
+                <!-- Industrial bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hebron-brick-rustic-grid" data-profile="rustic">
+                <!-- Rustic bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hebron-brick-contemporary-grid" data-profile="contemporary">
+                <!-- Contemporary bricks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- King Klinker View -->
+    <div id="king-klinker-view" class="manufacturer-view">
+        <div class="profile-selector">
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-profile="all">All Colors</button>
+            </div>
+        </div>
+        <div class="material-grid-container">
+            <div class="material-grid" id="king-klinker-all-grid">
+                <!-- All King Klinker bricks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- H.C. Muddox View -->
+    <div id="hc-muddox-view" class="manufacturer-view">
+        <div class="profile-selector">
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-profile="all">All Profiles</button>
+                <button class="profile-tab" data-profile="standard">Standard</button>
+                <button class="profile-tab" data-profile="handformed">Handformed</button>
+                <button class="profile-tab" data-profile="antique">Antique</button>
+            </div>
+        </div>
+        <div class="material-grid-container">
+            <div class="material-grid" id="hc-muddox-all-grid">
+                <!-- All H.C. Muddox bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hc-muddox-standard-grid" data-profile="standard">
+                <!-- Standard bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hc-muddox-handformed-grid" data-profile="handformed">
+                <!-- Handformed bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="hc-muddox-antique-grid" data-profile="antique">
+                <!-- Antique bricks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Interstate Brick View -->
+    <div id="interstate-brick-view" class="manufacturer-view">
+        <div class="material-grid-container">
+            <div class="material-grid" id="interstate-brick-all-grid">
+                <!-- All Interstate thin bricks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Section -->
+    <!-- Upload Section -->
+    <div class="material-grid">
+        <div class="material-item upload-material" data-type="thin-brick">
+            <div class="upload-icon">+</div>
+            <span>Upload</span>
+        </div>
+    </div>
+</div> <!-- This closes thin-brick-category -->
+           
+
+            
+            <!-- Full Brick Selection -->
+            <div class="material-category" id="full-brick-category">
+                <div class="manufacturer-selector">
+                    <div class="manufacturer-controls">
+                        <select id="full-brick-manufacturer-select" class="manufacturer-dropdown">
+  <option value="hebron-brick" selected>Hebron</option>
+  <option value="interstate-brick">Interstate</option>
+  <option value="glen-gery">Glen-Gary</option>
+  <option value="hc-muddox">H.C. Muddox</option>
+  <option value="palmetto-brick">Palmetto</option>
+  <option value="brampton-brick">Brampton Brick</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="material-grid-container" id="full-brick-views">
+                  <div class="material-grid" id="full-brick-all-grid"></div>
+                  <div class="profile-group" id="brampton-brick-all-grid" data-manufacturer="brampton-brick"></div>
+                  <div class="profile-group" id="glen-gery-all-grid" data-manufacturer="glen-gery"></div>
+                  <div class="profile-group" id="hc-muddox-all-grid" data-manufacturer="hc-muddox"></div>
+                  <div class="profile-group" id="hebron-brick-all-grid" data-manufacturer="hebron-brick"></div>
+                  <div class="profile-group" id="interstate-brick-all-grid" data-manufacturer="interstate-brick"></div>
+                  <div class="profile-group" id="palmetto-brick-all-grid" data-manufacturer="palmetto-brick"></div>
+                </div>
+                <div class="material-grid">
+                    <div class="material-item upload-material" data-type="full-brick">
+                        <div class="upload-icon">+</div>
+                        <span>Upload</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Stone & Concrete Surfaces -->
+            <div class="material-category" id="stone-concrete-surfaces-category">
+                <div class="material-grid">
+                    <div class="material-item upload-material" data-type="stone-concrete-surfaces">
+                        <div class="upload-icon">+</div>
+                        <span>Upload</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Wood Surfaces -->
+            <div class="material-category" id="wood-surfaces-category">
+                <div class="material-grid">
+                    <div class="material-item upload-material" data-type="wood-surfaces">
+                        <div class="upload-icon">+</div>
+                        <span>Upload</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Accents -->
+<div class="material-category" id="accents-category">
+    <div class="material-grid">
+        <div class="material-item accent-item" data-accent-type="strip-flashing">
+            <div class="accent-icon">⚡</div>
+            <span>Strip Flashing</span>
+        </div>
+        <div class="material-item accent-item" data-accent-type="flat-cap">
+            <div class="accent-icon">🧱</div>
+            <span>Flat Cap</span>
+        </div>
+    </div>
+</div>
+            <!-- Decor -->
+            <div class="material-category" id="decor-category">
+                <div class="material-grid">
+                    <div class="material-item upload-material" data-type="decor">
+                        <div class="upload-icon">+</div>
+                        <span>Upload</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden file inputs -->
+    <input type="file" id="stone-upload" accept="image/*" style="display: none;">
+<input type="file" id="thin-brick-upload" accept="image/*" style="display: none;">
+<input type="file" id="full-brick-upload" accept="image/*" style="display: none;">
+<input type="file" id="stone-concrete-surfaces-upload" accept="image/*" style="display: none;">
+<input type="file" id="wood-surfaces-upload" accept="image/*" style="display: none;">
+<input type="file" id="decor-upload" accept="image/*" style="display: none;">
+</div>
+
+<!-- Text Editing Modal -->
+<div id="text-edit-modal" class="text-edit-modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Text</h3>
+            <button id="close-text-modal" class="close-modal-btn">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="text-controls">
+                <input type="text" id="text-content" placeholder="Enter text...">
+                <div class="text-formatting">
+                    <label>Font:</label>
+                    <select id="text-font-family">
+                        <option value="Arial">Arial</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                        <option value="Courier New">Courier New</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Comic Sans MS">Comic Sans MS</option>
+                        <option value="Trebuchet MS">Trebuchet MS</option>
+                        <option value="Impact">Impact</option>
+                    </select>
+                </div>
+                <div class="text-formatting">
+                    <label>Font Size:</label>
+                    <input type="number" id="text-font-size" min="8" max="200" value="16">
+                    <span>px</span>
+                </div>
+                <div class="text-formatting">
+                    <label>Color:</label>
+                    <input type="color" id="text-color" value="#000000">
+                </div>
+                <div class="text-formatting">
+                    <label>
+                        <input type="checkbox" id="text-bold"> Bold
+                    </label>
+                    <label>
+                        <input type="checkbox" id="text-italic"> Italic
+                    </label>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button id="apply-text-changes" class="apply-btn">Apply</button>
+                <button id="cancel-text-changes" class="cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleSection(header) {
+    const section = header.parentElement;
+    const content = section.querySelector('.section-content');
+    const icon = header.querySelector('.toggle-icon');
+    
+    section.classList.toggle('collapsed');
+    
+    if (section.classList.contains('collapsed')) {
+        icon.textContent = '▶';
+    } else {
+        icon.textContent = '▼';
+    }
+}
+</script>
+
+<script src="script.js"></script>
+</body>
+</html>
