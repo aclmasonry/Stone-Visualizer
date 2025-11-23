@@ -5,11 +5,119 @@ console.log('JavaScript file is loading...');
 // ============= PRESET SYSTEM - STEP 1 ONLY =============
 let housePresets = {};
 
+// Default presets for specific houses (pre-mapped areas)
+const DEFAULT_HOUSE_PRESETS = {
+    'Featured-Panel-Wall': {
+        areas: [
+            // Box 1 (Row 1, Col 1)
+            {
+                id: Date.now() + 1,
+                points: [
+                    {x: 50, y: 100}, {x: 533, y: 100}, {x: 533, y: 492}, {x: 50, y: 492}
+                ],
+                stone: null,
+                scale: 150,
+                rotation: 180,
+                textureMode: 'stone_linear',
+                isCutout: false,
+                shadow: 0,
+                brightness: 100
+            },
+            // Box 2 (Row 1, Col 2)
+            {
+                id: Date.now() + 2,
+                points: [
+                    {x: 558, y: 100}, {x: 1041, y: 100}, {x: 1041, y: 492}, {x: 558, y: 492}
+                ],
+                stone: null,
+                scale: 150,
+                rotation: 180,
+                textureMode: 'stone_linear',
+                isCutout: false,
+                shadow: 0,
+                brightness: 100
+            },
+            // Box 3 (Row 1, Col 3)
+            {
+                id: Date.now() + 3,
+                points: [
+                    {x: 1066, y: 100}, {x: 1549, y: 100}, {x: 1549, y: 492}, {x: 1066, y: 492}
+                ],
+                stone: null,
+                scale: 150,
+                rotation: 180,
+                textureMode: 'stone_linear',
+                isCutout: false,
+                shadow: 0,
+                brightness: 100
+            },
+            // Box 4 (Row 2, Col 1)
+            {
+                id: Date.now() + 4,
+                points: [
+                    {x: 50, y: 517}, {x: 533, y: 517}, {x: 533, y: 909}, {x: 50, y: 909}
+                ],
+                stone: null,
+                scale: 150,
+                rotation: 180,
+                textureMode: 'stone_linear',
+                isCutout: false,
+                shadow: 0,
+                brightness: 100
+            },
+            // Box 5 (Row 2, Col 2)
+            {
+                id: Date.now() + 5,
+                points: [
+                    {x: 558, y: 517}, {x: 1041, y: 517}, {x: 1041, y: 909}, {x: 558, y: 909}
+                ],
+                stone: null,
+                scale: 150,
+                rotation: 180,
+                textureMode: 'stone_linear',
+                isCutout: false,
+                shadow: 0,
+                brightness: 100
+            },
+            // Box 6 (Row 2, Col 3)
+            {
+                id: Date.now() + 6,
+                points: [
+                    {x: 1066, y: 517}, {x: 1549, y: 517}, {x: 1549, y: 909}, {x: 1066, y: 909}
+                ],
+                stone: null,
+                scale: 150,
+                rotation: 180,
+                textureMode: 'stone_linear',
+                isCutout: false,
+                shadow: 0,
+                brightness: 100
+            }
+        ],
+        depthEdges: [],
+        sills: [],
+        brickRows: [],
+        decorations: [],
+        accents: [],
+        lastModified: Date.now(),
+        housePath: './Images/Canvas Images/Featured-Panel-Wall.svg'
+    }
+};
+
 // Load all presets from localStorage
 function loadAllPresets() {
     try {
         const saved = localStorage.getItem('housePresets');
         housePresets = saved ? JSON.parse(saved) : {};
+
+        // Merge default presets for houses that don't have saved presets
+        for (const [key, defaultPreset] of Object.entries(DEFAULT_HOUSE_PRESETS)) {
+            if (!housePresets[key]) {
+                housePresets[key] = JSON.parse(JSON.stringify(defaultPreset));
+                console.log(`Loaded default preset for: ${key}`);
+            }
+        }
+
         console.log('Loaded presets:', Object.keys(housePresets));
     } catch (e) {
         console.warn('Could not load presets:', e);
@@ -212,7 +320,16 @@ let customBrickColor = '#AD4F4F'; // Default custom brick color
 let CANVAS_ORIENTATION = 'landscape'; // 'landscape' or 'portrait'
 let customMortarColor = '#696969'; // Default custom mortar color
 let previousHouseValue = null; // Track previous house for saving
+let showMaterialLabels = false; // Toggle for showing material labels on areas
+let labelPosition = 'center'; // Position of labels: center, top, bottom, top-left, top-right, bottom-left, bottom-right
 
+// Material Selector - materials shown on canvas for comparison
+let canvasMaterials = []; // Array of {url, name, manufacturer, isFavorite}
+const MAX_CANVAS_MATERIALS = 12;
+let isMaterialSelectorMode = false; // Track if we're in material selector mode
+
+// Favorite materials saved in sidebar (subset of canvasMaterials that are favorited)
+let favoriteMaterials = []; // Array of {url, name, manufacturer, notes, addedDate}
 
 // Filter state variables
 let activeFilters = {};
@@ -407,6 +524,7 @@ let editingTextAnnotation = null;
 let isDraggingAnnotation = false;
 let dragStartAnnotation = null;
 let dragOriginalAnnotation = null;
+let draggingEndpoint = null; // 'start', 'end', or null (for whole shape dragging)
 
 // --- Material Definitions ---
 const sillTextures = {
@@ -1239,6 +1357,7 @@ const HEBRON_MATERIALS = [
     { name: 'Castlewood', profile: 'premium', url: 'Images/Thin Brick/Hebron/Castlewood_thin.jpg', manufacturer: 'hebron-brick' },
     { name: 'Dakota Common', profile: 'common', url: 'Images/Thin Brick/Hebron/Dakota Common_thin.jpg', manufacturer: 'hebron-brick' },
     { name: 'Desert Common', profile: 'common', url: 'Images/Thin Brick/Hebron/Desert-Common_thin.jpg', manufacturer: 'hebron-brick' },
+    { name: 'Garnet Smooth', profile: 'smooth', url: 'Images/Thin Brick/Hebron/Garnet-Smooth.jpg', manufacturer: 'hebron-brick' },
     { name: 'Gin Mill', profile: 'heritage', url: 'Images/Thin Brick/Hebron/Gin Mill_thin.jpg', manufacturer: 'hebron-brick' },
     { name: 'Harbourtown', profile: 'traditional', url: 'Images/Thin Brick/Hebron/Harbourtown_thin.jpg', manufacturer: 'hebron-brick' },
     { name: 'Leos Pub', profile: 'heritage', url: 'Images/Thin Brick/Hebron/Leos Pub_thin.jpg', manufacturer: 'hebron-brick' },
@@ -1247,7 +1366,6 @@ const HEBRON_MATERIALS = [
     { name: 'Onyx', profile: 'premium', url: 'Images/Thin Brick/Hebron/Onyx_thin.jpg', manufacturer: 'hebron-brick' },
     { name: 'Prairie Common', profile: 'common', url: 'Images/Thin Brick/Hebron/Prairie Common_thin.jpg', manufacturer: 'hebron-brick' },
     { name: 'Prohibition', profile: 'featured', url: 'Images/Thin Brick/Hebron/Prohibition_thin.jpg', manufacturer: 'hebron-brick' },
-    { name: 'Red River', profile: 'featured', url: 'Images/Thin Brick/Hebron/Red River_thin.jpg', manufacturer: 'hebron-brick' },
     { name: 'Rosemont', profile: 'featured', url: 'Images/Thin Brick/Hebron/Rosemont_thin.jpg', manufacturer: 'hebron-brick' },
     { name: 'Route 66', profile: 'heritage', url: 'Images/Thin Brick/Hebron/Route 66_thin.jpg', manufacturer: 'hebron-brick' },
     { name: 'Rum Runner', profile: 'heritage', url: 'Images/Thin Brick/Hebron/Rum-runner_thin.jpg', manufacturer: 'hebron-brick' },
@@ -1278,12 +1396,12 @@ const KING_KLINKER_MATERIALS = [
 
 // H.C. Muddox Thin Brick Materials
 const HC_MUDDOX_MATERIALS = [
-    { name: 'Redwood', profile: 'standard', url: 'Images/Thin Brick/H.C Muddox/Thinbrick- Redwood.jpg', manufacturer: 'hc-muddox' },
     { name: 'California Handmold', profile: 'handformed', url: 'Images/Thin Brick/H.C Muddox/Thinbrick-California Handmold.jpg', manufacturer: 'hc-muddox' },
     { name: 'Clinker', profile: 'standard', url: 'Images/Thin Brick/H.C Muddox/Thinbrick-Clinker.jpg', manufacturer: 'hc-muddox' },
     { name: 'Folsom Gold', profile: 'standard', url: 'Images/Thin Brick/H.C Muddox/Thinbrick-Folsom_gold.jpg', manufacturer: 'hc-muddox' },
     { name: 'Mendocino', profile: 'standard', url: 'Images/Thin Brick/H.C Muddox/Thinbrick-Mendocino.jpg', manufacturer: 'hc-muddox' },
     { name: 'Placer Antique', profile: 'antique', url: 'Images/Thin Brick/H.C Muddox/Thinbrick-Placer Antique.jpg', manufacturer: 'hc-muddox' },
+    { name: 'Redwood', profile: 'standard', url: 'Images/Thin Brick/H.C Muddox/Thinbrick- Redwood.jpg', manufacturer: 'hc-muddox' },
     { name: 'Sacramentan', profile: 'standard', url: 'Images/Thin Brick/H.C Muddox/Thinbrick-Sacramentan.jpg', manufacturer: 'hc-muddox' }
 ];
 
@@ -1301,11 +1419,13 @@ const INTERSTATE_MATERIALS = [
     { name: 'Midnight Black', profile: 'standard', url: 'Images/Thin Brick/Interstate/Midnight Black.jpg', manufacturer: 'interstate-brick' },
     { name: 'Monterey', profile: 'standard', url: 'Images/Thin Brick/Interstate/Monterey.jpg', manufacturer: 'interstate-brick' },
     { name: 'Mountain Red', profile: 'standard', url: 'Images/Thin Brick/Interstate/Mountain Red.jpg', manufacturer: 'interstate-brick' },
+    { name: 'Mountain Red Ruff', profile: 'ruff', url: 'Images/Thin Brick/Interstate/Mountain_red-ruff.jpg', manufacturer: 'interstate-brick' },
     { name: 'Obsidian', profile: 'standard', url: 'Images/Thin Brick/Interstate/Obsidian.jpg', manufacturer: 'interstate-brick' },
     { name: 'Pewter', profile: 'standard', url: 'Images/Thin Brick/Interstate/Pewter.jpg', manufacturer: 'interstate-brick' },
     { name: 'Platinum', profile: 'standard', url: 'Images/Thin Brick/Interstate/Platinum.jpg', manufacturer: 'interstate-brick' },
     { name: 'Smokey Mountain', profile: 'standard', url: 'Images/Thin Brick/Interstate/Smokey Mountain.jpg', manufacturer: 'interstate-brick' },
     { name: 'Terracotta', profile: 'standard', url: 'Images/Thin Brick/Interstate/Terracotta.jpg', manufacturer: 'interstate-brick' },
+    { name: 'Terracotta Ruff', profile: 'ruff', url: 'Images/Thin Brick/Interstate/Teracotta ruff.jpg', manufacturer: 'interstate-brick' },
     { name: 'Tumbleweed', profile: 'standard', url: 'Images/Thin Brick/Interstate/Tumbleweed.jpg', manufacturer: 'interstate-brick' }
 ];
 
@@ -1316,6 +1436,25 @@ const DUTCH_QUALITY_THIN_BRICK_MATERIALS = [
     { name: 'Snowpack', profile: 'handformed', url: 'Images/Thin Brick/Dutch Quality/DQ-Handformed-Brick-Snowpack.jpg', manufacturer: 'dutch-quality-thin-brick' }
 ];
 
+// Metrobrick Thin Brick Materials
+const METROBRICK_MATERIALS = [
+    { name: '105 Fieldstone', profile: 'standard', url: 'Images/Thin Brick/Metrobrick/105-Fieldstone.png', manufacturer: 'metrobrick' },
+    { name: '310 Main Street', profile: 'standard', url: 'Images/Thin Brick/Metrobrick/310-Main-Street.png', manufacturer: 'metrobrick' },
+    { name: '320 Schoolhouse Red', profile: 'standard', url: 'Images/Thin Brick/Metrobrick/320-Schoolhouse-Red.png', manufacturer: 'metrobrick' },
+    { name: '350 Main Street', profile: 'standard', url: 'Images/Thin Brick/Metrobrick/350-Main-Street.png', manufacturer: 'metrobrick' },
+    { name: '365 Schoolhouse Red', profile: 'standard', url: 'Images/Thin Brick/Metrobrick/365-Schoolhouse-Red.png', manufacturer: 'metrobrick' },
+    { name: '458 Brownstone', profile: 'standard', url: 'Images/Thin Brick/Metrobrick/458-Brownstone.png', manufacturer: 'metrobrick' },
+    { name: '505 Monument', profile: 'standard', url: 'Images/Thin Brick/Metrobrick/505-Monument.png', manufacturer: 'metrobrick' },
+    { name: '507 Empire', profile: 'standard', url: 'Images/Thin Brick/Metrobrick/507-Empire.png', manufacturer: 'metrobrick' },
+    { name: '710 Charcoal', profile: 'standard', url: 'Images/Thin Brick/Metrobrick/710-Charcoal.png', manufacturer: 'metrobrick' }
+];
+
+// Rocky Mountain Stoneworks Thin Brick Materials
+const RMS_THIN_BRICK_MATERIALS = [
+    { name: 'Graphite Grey Wirecut', profile: 'wirecut', url: 'Images/Thin Brick/Rocky Mountain Stoneworks/RMS-Graphite-Grey-Wirecut.jpg', manufacturer: 'rocky-mountain-stoneworks' },
+    { name: 'White Opal Wirecut', profile: 'wirecut', url: 'Images/Thin Brick/Rocky Mountain Stoneworks/RMS-White-Opal-Wirecut.jpg', manufacturer: 'rocky-mountain-stoneworks' }
+];
+
 // Full Brick (Full‑Bed) — grouped by manufacturer in requested order
 // Paths: Images/Full Brick/<Manufacturer>/<ImageName>
 
@@ -1323,28 +1462,36 @@ const DUTCH_QUALITY_THIN_BRICK_MATERIALS = [
 const FULL_BRICK_HEBRON = [
   { name: 'Ashton',                profile: 'full-brick', url: 'Images/Full Brick/Hebron/Ashton_full.jpg', manufacturer: 'hebron-brick' },
   { name: 'Big Horn',              profile: 'full-brick', url: 'Images/Full Brick/Hebron/Big-Horn.jpg', manufacturer: 'hebron-brick' },
+  { name: 'Bootlegger',            profile: 'full-brick', url: 'Images/Full Brick/Hebron/Bootlegger.jpg', manufacturer: 'hebron-brick' },
   { name: 'Brampton',              profile: 'full-brick', url: 'Images/Full Brick/Hebron/Brampton.jpg', manufacturer: 'hebron-brick' },
   { name: 'Buckwheat',             profile: 'full-brick', url: 'Images/Full Brick/Hebron/Buckwheat.jpg', manufacturer: 'hebron-brick' },
   { name: 'Cascade',               profile: 'full-brick', url: 'Images/Full Brick/Hebron/Cascade.jpg', manufacturer: 'hebron-brick' },
   { name: 'Champagne',             profile: 'full-brick', url: 'Images/Full Brick/Hebron/Champagne.jpg', manufacturer: 'hebron-brick' },
   { name: 'Cherry Creek Ironspot', profile: 'full-brick', url: 'Images/Full Brick/Hebron/Cherry-Creek-Ironspot.jpg', manufacturer: 'hebron-brick' },
   { name: 'Chocolate',             profile: 'full-brick', url: 'Images/Full Brick/Hebron/Chocolate.jpg', manufacturer: 'hebron-brick' },
+  { name: 'Concordia',             profile: 'full-brick', url: 'Images/Full Brick/Hebron/concordia.jpg', manufacturer: 'hebron-brick' },
   { name: 'Copper Creek Ironspot', profile: 'full-brick', url: 'Images/Full Brick/Hebron/Copper-Creek-Ironspot.jpg', manufacturer: 'hebron-brick' },
   { name: 'Crimson Creek Ironspot',profile: 'full-brick', url: 'Images/Full Brick/Hebron/Crimson-Creek-Ironspot.jpg', manufacturer: 'hebron-brick' },
   { name: 'Garnet',                profile: 'full-brick', url: 'Images/Full Brick/Hebron/Garnet_full.jpg', manufacturer: 'hebron-brick' },
   { name: 'Goldenrod',             profile: 'full-brick', url: 'Images/Full Brick/Hebron/Goldenrod.jpg', manufacturer: 'hebron-brick' },
-  { name: 'Ovation',        profile: 'full-brick', url: 'Images/Full Brick/Hebron/Hebron-Ovation.jpg', manufacturer: 'hebron-brick' },
+  { name: 'Madison',               profile: 'full-brick', url: 'Images/Full Brick/Hebron/Hebron-Brick-Madison.jpg', manufacturer: 'hebron-brick' },
+  { name: 'Ovation',               profile: 'full-brick', url: 'Images/Full Brick/Hebron/Hebron-Ovation.jpg', manufacturer: 'hebron-brick' },
   { name: 'Maple',                 profile: 'full-brick', url: 'Images/Full Brick/Hebron/Maple.jpg', manufacturer: 'hebron-brick' },
   { name: 'Maroon',                profile: 'full-brick', url: 'Images/Full Brick/Hebron/Maroon.jpg', manufacturer: 'hebron-brick' },
   { name: 'Meadow Creek',          profile: 'full-brick', url: 'Images/Full Brick/Hebron/Meadow-Creek.jpg', manufacturer: 'hebron-brick' },
   { name: 'Medora',                profile: 'full-brick', url: 'Images/Full Brick/Hebron/Medora.jpg', manufacturer: 'hebron-brick' },
+  { name: 'Misty Gray',            profile: 'full-brick', url: 'Images/Full Brick/Hebron/Misty-Gray.jpg', manufacturer: 'hebron-brick' },
   { name: 'Onyx Ironspot',         profile: 'full-brick', url: 'Images/Full Brick/Hebron/Onyx-Ironspot.jpg', manufacturer: 'hebron-brick' },
   { name: 'Opus',                  profile: 'full-brick', url: 'Images/Full Brick/Hebron/Opus.jpg', manufacturer: 'hebron-brick' },
   { name: 'Red',                   profile: 'full-brick', url: 'Images/Full Brick/Hebron/Red.jpg', manufacturer: 'hebron-brick' },
   { name: 'Sahara',                profile: 'full-brick', url: 'Images/Full Brick/Hebron/Sahara.jpg', manufacturer: 'hebron-brick' },
+  { name: 'Scoria',                profile: 'full-brick', url: 'Images/Full Brick/Hebron/Scoria.jpg', manufacturer: 'hebron-brick' },
+  { name: 'Sea Gray 6',            profile: 'full-brick', url: 'Images/Full Brick/Hebron/sea-gray-6.jpg', manufacturer: 'hebron-brick' },
+  { name: 'Sea Gray 12',           profile: 'full-brick', url: 'Images/Full Brick/Hebron/sea-gray-12.jpg', manufacturer: 'hebron-brick' },
   { name: 'Shiloh',                profile: 'full-brick', url: 'Images/Full Brick/Hebron/Shiloh.jpg', manufacturer: 'hebron-brick' },
   { name: 'Silverado',             profile: 'full-brick', url: 'Images/Full Brick/Hebron/Silverado.jpg', manufacturer: 'hebron-brick' },
   { name: 'Slate Gray',            profile: 'full-brick', url: 'Images/Full Brick/Hebron/Slate-Gray.jpg', manufacturer: 'hebron-brick' },
+  { name: 'Smokehouse',            profile: 'full-brick', url: 'Images/Full Brick/Hebron/smokehouse.jpg', manufacturer: 'hebron-brick' },
   { name: 'Walnut Creek Ironspot', profile: 'full-brick', url: 'Images/Full Brick/Hebron/Walnut-Creek-Ironspot.jpg', manufacturer: 'hebron-brick' },
   { name: 'Waterford',             profile: 'full-brick', url: 'Images/Full Brick/Hebron/Waterford.jpg', manufacturer: 'hebron-brick' }
 ];
@@ -1354,19 +1501,17 @@ const FULL_BRICK_INTERSTATE = [
   { name: 'Almond Brick',           profile: 'full-brick', url: 'Images/Full Brick/Interstate/Almond-Brick.jpg',              manufacturer: 'interstate-brick' },
   { name: 'Ash',                    profile: 'full-brick', url: 'Images/Full Brick/Interstate/Ash.jpg',                        manufacturer: 'interstate-brick' },
   { name: 'Coal',                   profile: 'full-brick', url: 'Images/Full Brick/Interstate/Coal.jpg',                       manufacturer: 'interstate-brick' },
-  { name: 'Arctic White',           profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Arctic-White.jpg',    manufacturer: 'interstate-brick' },
-  { name: 'Pewter',                 profile: 'full-brick', url: 'Images/Full Brick/Interstate/Pewter.jpg',                     manufacturer: 'interstate-brick' },
-  { name: 'Platinum',               profile: 'full-brick', url: 'Images/Full Brick/Interstate/Platinum.jpg',                   manufacturer: 'interstate-brick' },
-  { name: 'Desert Sand',            profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Desert-Sand.jpg', manufacturer: 'interstate-brick' },
-  { name: 'Monterey',               profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Monterey.webp', manufacturer: 'interstate-brick' },
-  { name: 'Platinum (Interstate)',  profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Platinum.jpg',  manufacturer: 'interstate-brick' },
-  { name: 'Smokey Mountain',        profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Smokey-Mountain.jpg', manufacturer: 'interstate-brick' },
-  { name: 'Tumbleweed',                profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Tumbleweed.jpg',   manufacturer: 'interstate-brick' },
-  { name: 'Midnight Black',        profile: 'full-brick', url: 'Images/Full Brick/Interstate/Midnight-Black_full.jpg',       manufacturer: 'interstate-brick' },
-  { name: 'Obsidian Black',         profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Obsidian-Black.jpg',  manufacturer: 'interstate-brick' },
   { name: 'Copperstone',            profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Copperstone.jpg', manufacturer: 'interstate-brick' },
+  { name: 'Desert Sand',            profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Desert-Sand.jpg', manufacturer: 'interstate-brick' },
+  { name: 'Arctic White',           profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Arctic-White.jpg',    manufacturer: 'interstate-brick' },
+  { name: 'Monterey',               profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Monterey.webp', manufacturer: 'interstate-brick' },
+  { name: 'Platinum',               profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Platinum.jpg',  manufacturer: 'interstate-brick' },
+  { name: 'Smokey Mountain',        profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Smokey-Mountain.jpg', manufacturer: 'interstate-brick' },
+  { name: 'Tumbleweed',             profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Brick-Tumbleweed.jpg', manufacturer: 'interstate-brick' },
+  { name: 'Obsidian Black',         profile: 'full-brick', url: 'Images/Full Brick/Interstate/Interstate-Obsidian-Black.jpg',  manufacturer: 'interstate-brick' },
+  { name: 'Midnight Black',         profile: 'full-brick', url: 'Images/Full Brick/Interstate/Midnight-Black_full.jpg',        manufacturer: 'interstate-brick' },
   { name: 'Mountain Red',           profile: 'full-brick', url: 'Images/Full Brick/Interstate/Mountain-Red-Interstate.jpg',    manufacturer: 'interstate-brick' },
-  
+  { name: 'Pewter',                 profile: 'full-brick', url: 'Images/Full Brick/Interstate/Pewter.jpg',                     manufacturer: 'interstate-brick' },
 ];
 
 // 3) Glen-Gery
@@ -1490,31 +1635,57 @@ const FULL_BRICK_MATERIALS = [
   function applyFullBrickSelection(mat){
     if(!mat) return;
     // Keep parity with other pickers
-    window.currentStone = mat;
+    window.currentStone = mat.url;
 
+    // Ensure the image is loaded into stoneImages
+    if (!stoneImages[mat.url]) {
+      const fullImg = new Image();
+      fullImg.crossOrigin = "anonymous";
+      fullImg.onload = function() {
+        stoneImages[mat.url] = fullImg;
+        console.log('✅ Loaded full-res full brick image:', mat.name);
+        // Re-apply after image loads
+        applyFullBrickToArea(mat);
+        // Clear stone patterns to force regeneration (like thin brick does)
+        if (typeof stonePatterns !== 'undefined') stonePatterns = {};
+        if (typeof drawCanvas === 'function') drawCanvas();
+      };
+      fullImg.src = mat.url;
+    } else {
+      // Image already loaded - apply immediately
+      applyFullBrickToArea(mat);
+      // Clear stone patterns to force regeneration (like thin brick does)
+      if (typeof stonePatterns !== 'undefined') stonePatterns = {};
+      if (typeof drawCanvas === 'function') drawCanvas();
+    }
+  }
+
+  function applyFullBrickToArea(mat) {
     // If an area is selected, bind material to it
     if (Array.isArray(window.areas) && typeof window.selectedAreaIndex === 'number' && window.selectedAreaIndex >= 0 && window.areas[window.selectedAreaIndex]){
       const area = window.areas[window.selectedAreaIndex];
+
+      // Match thin brick behavior exactly (see line 6798-6808)
+      area.stone = mat.url;
+      area.textureMode = 'stone_linear';
       area.materialType = 'full-brick';
       area.pattern = (window.currentBrickPattern || 'running');
       area.mortarColor = (window.currentBrickMortarColor || '#696969');
+
       // Legacy keys other parts may read
       area.stoneUrl = mat.url;
       area.materialUrl = mat.url;
-      area.stone = mat;
-      // Ensure brick renderer path gets the right texture fields
-area.textureMode = 'brick';
-area.textureUrl = mat.url;
-if (stoneImages[mat.url] instanceof Image) area.textureImage = stoneImages[mat.url];
       area.textureUrl = mat.url;
-if (stoneImages[mat.url] instanceof Image) area.textureImage = stoneImages[mat.url];
+
+      if (stoneImages[mat.url] instanceof Image) {
+        area.textureImage = stoneImages[mat.url];
+      }
+
       // Respect brick scale helper if present
       if (typeof scaleToBrickSize === 'function') {
         area.scale = scaleToBrickSize(window.GLOBAL_STONE_SCALE || 100);
       }
     }
-
-    requestRepaint();
   }
 
   function makeCard(mat){
@@ -1532,9 +1703,9 @@ if (stoneImages[mat.url] instanceof Image) area.textureImage = stoneImages[mat.u
     card.style.height = '110px';
     card.style.flexShrink = '0';
     card.style.padding = '8px';
-   card.style.border = '2px solid #2c3e50';
+   card.style.border = '2px solid #505050';
     card.style.borderRadius = '8px';
-    card.style.background = 'white';
+    card.style.background = '#3a3a3a';
     card.style.cursor = 'pointer';
     card.style.textAlign = 'center';
     card.style.transition = 'all 0.2s ease';
@@ -1556,18 +1727,69 @@ if (stoneImages[mat.url] instanceof Image) area.textureImage = stoneImages[mat.u
     const label = document.createElement('span');
     label.textContent = mat.name;
     label.style.fontSize = '10px';
-    label.style.color = '#666';
+    label.style.color = '#e0e0e0';
     label.style.lineHeight = '1.2';
     label.style.fontWeight = '500';
     label.style.textAlign = 'center';
 
+    // Star button for material selector
+    const starBtn = document.createElement('button');
+    starBtn.type = 'button';
+    starBtn.className = 'material-star-btn';
+    starBtn.innerHTML = '★';
+    starBtn.title = 'Add to comparison';
+    starBtn.setAttribute('data-url', mat.url);
+    starBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleStarredMaterial(mat.url, mat.name, mat.manufacturer || '');
+    });
+    // Check if already starred
+    if (typeof starredMaterials !== 'undefined' && starredMaterials.some(m => m.url === mat.url)) {
+        starBtn.classList.add('starred');
+    }
+
+    card.appendChild(starBtn);
     card.appendChild(img);
     card.appendChild(label);
+
+    // Hover effects - matching dark mode CSS
+    card.addEventListener('mouseenter', function() {
+      if (!this.classList.contains('selected')) {
+        this.style.transform = 'translateY(-3px)';
+        this.style.boxShadow = '0 6px 20px rgba(0,0,0,0.3)';
+        this.style.borderColor = '#3498db';
+      }
+    });
+    card.addEventListener('mouseleave', function() {
+      if (!this.classList.contains('selected')) {
+        this.style.transform = '';
+        this.style.boxShadow = '';
+        this.style.borderColor = '#505050';
+      }
+    });
 
     // Click -> apply selection and minimize picker (parity with thin brick)
     card.addEventListener('click', function(ev){
       ev.preventDefault();
       ev.stopPropagation();
+
+      // Remove selected from all full brick cards
+      qa('.material-card.material-item').forEach(c => {
+        c.classList.remove('selected');
+        c.style.borderColor = '#505050';
+        c.style.background = '#3a3a3a';
+        c.style.transform = '';
+        c.style.boxShadow = '';
+      });
+
+      // Add selected to this card - matching dark mode CSS
+      this.classList.add('selected');
+      this.style.borderColor = '#3498db';
+      this.style.background = '#2a4a5a';
+      this.style.transform = 'translateY(-2px)';
+      this.style.boxShadow = '0 4px 15px rgba(52, 152, 219, 0.3)';
+
       applyFullBrickSelection(mat);
       try {
         const panel = q('[data-section="full-brick"], .full-brick, #full-brick-panel');
@@ -2103,6 +2325,757 @@ function setCanvasOrientation(orientation) {
 
 
 
+// --- Enhanced Drawing Tools - NEW FEATURES ---
+
+// Enhanced drawing state variables
+let drawingOpacity = 1.0;
+let brushHardness = 100;
+let shapeFillEnabled = false;
+let polygonSides = 6;
+let currentLayerId = 1;
+let layers = [
+    { id: 0, name: 'Canvas (House)', visible: true, locked: true, opacity: 100, blendMode: 'source-over', annotations: [] },
+    { id: 1, name: 'Drawings', visible: true, locked: false, opacity: 100, blendMode: 'source-over', annotations: [] }
+];
+
+// Initialize enhanced drawing tools
+function setupEnhancedDrawingTools() {
+    // Brush Size Presets
+    const brushPresets = document.querySelectorAll('.brush-preset');
+    brushPresets.forEach(preset => {
+        preset.addEventListener('click', function() {
+            const size = parseInt(this.dataset.size);
+            brushPresets.forEach(p => p.classList.remove('active'));
+            this.classList.add('active');
+
+            const strokeSlider = document.getElementById('stroke-width');
+            const strokeValue = document.getElementById('stroke-width-value');
+            if (strokeSlider) {
+                strokeSlider.value = size;
+                strokeWidth = size;
+            }
+            if (strokeValue) strokeValue.textContent = size;
+
+            showMessage(`Brush size set to ${size}px`);
+        });
+    });
+
+    // Opacity Control
+    const opacitySlider = document.getElementById('drawing-opacity');
+    const opacityValue = document.getElementById('opacity-value');
+    if (opacitySlider) {
+        opacitySlider.addEventListener('input', function() {
+            drawingOpacity = this.value / 100;
+            if (opacityValue) opacityValue.textContent = this.value;
+
+            // Update selected annotation opacity
+            if (selectedAnnotation !== null && annotations[selectedAnnotation]) {
+                annotations[selectedAnnotation].opacity = drawingOpacity;
+                redrawAnnotations();
+            }
+        });
+    }
+
+    // Brush Hardness Control
+    const hardnessSlider = document.getElementById('brush-hardness');
+    const hardnessValue = document.getElementById('hardness-value');
+    if (hardnessSlider) {
+        hardnessSlider.addEventListener('input', function() {
+            brushHardness = parseInt(this.value);
+            if (hardnessValue) hardnessValue.textContent = this.value;
+        });
+    }
+
+    // Stroke Width Value Display
+    const strokeSlider = document.getElementById('stroke-width');
+    const strokeValue = document.getElementById('stroke-width-value');
+    if (strokeSlider && strokeValue) {
+        strokeSlider.addEventListener('input', function() {
+            strokeValue.textContent = this.value;
+        });
+    }
+
+    // Font Size Value Display
+    const fontSlider = document.getElementById('font-size');
+    const fontValue = document.getElementById('font-size-value');
+    if (fontSlider && fontValue) {
+        fontSlider.addEventListener('input', function() {
+            fontValue.textContent = this.value;
+        });
+    }
+
+    // Shape Fill Toggle - also updates selected shapes
+    const shapeFillToggle = document.getElementById('shape-fill-toggle');
+    if (shapeFillToggle) {
+        shapeFillToggle.addEventListener('change', function() {
+            shapeFillEnabled = this.checked;
+
+            // Update selected annotation if it's a fillable shape
+            if (selectedAnnotation !== null && annotations[selectedAnnotation]) {
+                const annotation = annotations[selectedAnnotation];
+                const fillableShapes = ['circle', 'rectangle', 'triangle', 'star', 'polygon', 'diamond'];
+                if (fillableShapes.includes(annotation.type)) {
+                    annotation.fill = shapeFillEnabled;
+                    redrawAnnotations();
+                    showMessage(shapeFillEnabled ? 'Shape filled' : 'Shape fill removed');
+                    return;
+                }
+            }
+
+            showMessage(shapeFillEnabled ? 'Shape fill enabled for new shapes' : 'Shape fill disabled');
+        });
+    }
+
+    // Polygon Sides - also updates selected polygon
+    const polygonSidesInput = document.getElementById('polygon-sides');
+    if (polygonSidesInput) {
+        polygonSidesInput.addEventListener('change', function() {
+            polygonSides = parseInt(this.value);
+            if (polygonSides < 3) polygonSides = 3;
+            if (polygonSides > 12) polygonSides = 12;
+            this.value = polygonSides;
+
+            // Update selected polygon if any
+            if (selectedAnnotation !== null && annotations[selectedAnnotation]) {
+                const annotation = annotations[selectedAnnotation];
+                if (annotation.type === 'polygon') {
+                    annotation.sides = polygonSides;
+                    redrawAnnotations();
+                    showMessage(`Polygon updated to ${polygonSides} sides`);
+                }
+            }
+        });
+    }
+
+    // Global keyboard listener for Delete key to remove selected annotations
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedAnnotation !== null) {
+            // Don't delete if user is typing in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            if (annotations[selectedAnnotation]) {
+                const annotationType = annotations[selectedAnnotation].type;
+                annotations.splice(selectedAnnotation, 1);
+                selectedAnnotation = null;
+                redrawAnnotations();
+                showMessage(`${annotationType.charAt(0).toUpperCase() + annotationType.slice(1)} deleted.`);
+                e.preventDefault();
+            }
+        }
+    });
+
+    // Layer Controls
+    setupLayerControls();
+
+    // Adjustment Controls
+    setupAdjustmentControls();
+
+    // Flatten Layers Button
+    const flattenBtn = document.getElementById('flatten-layers-btn');
+    if (flattenBtn) {
+        flattenBtn.addEventListener('click', flattenLayers);
+    }
+}
+
+// Layer System
+function setupLayerControls() {
+    const addLayerBtn = document.getElementById('add-layer-btn');
+    const deleteLayerBtn = document.getElementById('delete-layer-btn');
+    const duplicateLayerBtn = document.getElementById('duplicate-layer-btn');
+    const layerOpacitySlider = document.getElementById('layer-opacity');
+    const layerOpacityValue = document.getElementById('layer-opacity-value');
+    const blendModeSelect = document.getElementById('blend-mode');
+
+    if (addLayerBtn) {
+        addLayerBtn.addEventListener('click', function() {
+            const newId = Math.max(...layers.map(l => l.id)) + 1;
+            layers.unshift({
+                id: newId,
+                name: `Layer ${newId}`,
+                visible: true,
+                locked: false,
+                opacity: 100,
+                blendMode: 'source-over',
+                annotations: []
+            });
+            currentLayerId = newId;
+            updateLayersList();
+            showMessage(`Layer ${newId} created`);
+        });
+    }
+
+    if (deleteLayerBtn) {
+        deleteLayerBtn.addEventListener('click', function() {
+            if (layers.length <= 1) {
+                showMessage('Cannot delete the last layer');
+                return;
+            }
+            const layer = layers.find(l => l.id === currentLayerId);
+            if (layer && layer.locked) {
+                showMessage('Cannot delete locked layer');
+                return;
+            }
+            layers = layers.filter(l => l.id !== currentLayerId);
+            currentLayerId = layers[0].id;
+            updateLayersList();
+            redrawAnnotations();
+            showMessage('Layer deleted');
+        });
+    }
+
+    if (duplicateLayerBtn) {
+        duplicateLayerBtn.addEventListener('click', function() {
+            const layer = layers.find(l => l.id === currentLayerId);
+            if (layer) {
+                const newId = Math.max(...layers.map(l => l.id)) + 1;
+                const duplicate = {
+                    ...layer,
+                    id: newId,
+                    name: `${layer.name} copy`,
+                    locked: false,
+                    annotations: JSON.parse(JSON.stringify(layer.annotations))
+                };
+                const index = layers.findIndex(l => l.id === currentLayerId);
+                layers.splice(index, 0, duplicate);
+                currentLayerId = newId;
+                updateLayersList();
+                redrawAnnotations();
+                showMessage('Layer duplicated');
+            }
+        });
+    }
+
+    if (layerOpacitySlider) {
+        layerOpacitySlider.addEventListener('input', function() {
+            const layer = layers.find(l => l.id === currentLayerId);
+            if (layer) {
+                layer.opacity = parseInt(this.value);
+                if (layerOpacityValue) layerOpacityValue.textContent = this.value;
+                redrawAnnotations();
+            }
+        });
+    }
+
+    if (blendModeSelect) {
+        blendModeSelect.addEventListener('change', function() {
+            const layer = layers.find(l => l.id === currentLayerId);
+            if (layer) {
+                layer.blendMode = this.value;
+                redrawAnnotations();
+                showMessage(`Blend mode set to ${this.options[this.selectedIndex].text}`);
+            }
+        });
+    }
+
+    // Layer item clicks
+    document.addEventListener('click', function(e) {
+        const layerItem = e.target.closest('.layer-item');
+        if (layerItem) {
+            const layerId = parseInt(layerItem.dataset.layer);
+
+            // Check if clicking on visibility toggle
+            if (e.target.classList.contains('layer-visibility')) {
+                const layer = layers.find(l => l.id === layerId);
+                if (layer) {
+                    layer.visible = !layer.visible;
+                    e.target.textContent = layer.visible ? '👁' : '👁‍🗨';
+                    redrawAnnotations();
+                }
+                return;
+            }
+
+            // Check if clicking on lock toggle
+            if (e.target.classList.contains('layer-lock')) {
+                const layer = layers.find(l => l.id === layerId);
+                if (layer) {
+                    layer.locked = !layer.locked;
+                    e.target.textContent = layer.locked ? '🔒' : '🔓';
+
+                    // Show message for background layer lock status
+                    if (layerId === 0) {
+                        if (layer.locked) {
+                            showMessage('Canvas locked. Drawing tools won\'t affect the house image.');
+                        } else {
+                            showMessage('Canvas unlocked. Fill, blur and adjustments can now modify the house image.');
+                        }
+                    }
+                }
+                return;
+            }
+
+            // Select layer
+            currentLayerId = layerId;
+            updateLayersList();
+        }
+    });
+
+    updateLayersList();
+}
+
+function updateLayersList() {
+    const layersList = document.getElementById('layers-list');
+    if (!layersList) return;
+
+    layersList.innerHTML = '';
+    layers.forEach(layer => {
+        const item = document.createElement('div');
+        item.className = `layer-item${layer.id === currentLayerId ? ' active' : ''}`;
+        item.dataset.layer = layer.id;
+        item.innerHTML = `
+            <span class="layer-visibility">${layer.visible ? '👁' : '👁‍🗨'}</span>
+            <span class="layer-name">${layer.name}</span>
+            <span class="layer-lock">${layer.locked ? '🔒' : '🔓'}</span>
+        `;
+        layersList.appendChild(item);
+    });
+
+    // Update blend mode and opacity controls
+    const layer = layers.find(l => l.id === currentLayerId);
+    if (layer) {
+        const blendModeSelect = document.getElementById('blend-mode');
+        const layerOpacitySlider = document.getElementById('layer-opacity');
+        const layerOpacityValue = document.getElementById('layer-opacity-value');
+
+        if (blendModeSelect) blendModeSelect.value = layer.blendMode;
+        if (layerOpacitySlider) layerOpacitySlider.value = layer.opacity;
+        if (layerOpacityValue) layerOpacityValue.textContent = layer.opacity;
+    }
+}
+
+function flattenLayers() {
+    if (confirm('Flatten all layers? This cannot be undone.')) {
+        // Combine all annotations into one layer
+        const allAnnotations = [];
+        layers.forEach(layer => {
+            if (layer.visible) {
+                allAnnotations.push(...layer.annotations);
+            }
+        });
+
+        layers = [{
+            id: 0,
+            name: 'Flattened',
+            visible: true,
+            locked: false,
+            opacity: 100,
+            blendMode: 'source-over',
+            annotations: allAnnotations
+        }];
+        currentLayerId = 0;
+        annotations = allAnnotations;
+        updateLayersList();
+        redrawAnnotations();
+        showMessage('Layers flattened');
+    }
+}
+
+// Adjustment Controls
+function setupAdjustmentControls() {
+    const brightnessSlider = document.getElementById('adj-brightness');
+    const contrastSlider = document.getElementById('adj-contrast');
+    const blurSlider = document.getElementById('adj-blur');
+    const sharpenSlider = document.getElementById('adj-sharpen');
+    const applyBtn = document.getElementById('apply-adjustments-btn');
+    const resetBtn = document.getElementById('reset-adjustments-btn');
+
+    // Update value displays
+    if (brightnessSlider) {
+        brightnessSlider.addEventListener('input', function() {
+            document.getElementById('brightness-value').textContent = this.value;
+        });
+    }
+    if (contrastSlider) {
+        contrastSlider.addEventListener('input', function() {
+            document.getElementById('contrast-value').textContent = this.value;
+        });
+    }
+    if (blurSlider) {
+        blurSlider.addEventListener('input', function() {
+            document.getElementById('blur-value').textContent = this.value;
+        });
+    }
+    if (sharpenSlider) {
+        sharpenSlider.addEventListener('input', function() {
+            document.getElementById('sharpen-value').textContent = this.value;
+        });
+    }
+
+    if (applyBtn) {
+        applyBtn.addEventListener('click', applyAdjustments);
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+            if (brightnessSlider) { brightnessSlider.value = 0; document.getElementById('brightness-value').textContent = '0'; }
+            if (contrastSlider) { contrastSlider.value = 0; document.getElementById('contrast-value').textContent = '0'; }
+            if (blurSlider) { blurSlider.value = 0; document.getElementById('blur-value').textContent = '0'; }
+            if (sharpenSlider) { sharpenSlider.value = 0; document.getElementById('sharpen-value').textContent = '0'; }
+            showMessage('Adjustments reset');
+        });
+    }
+}
+
+function applyAdjustments() {
+    // Check if canvas is locked
+    if (isCanvasLocked()) {
+        showMessage('Canvas is locked. Unlock the Background layer to apply adjustments.');
+        return;
+    }
+
+    const brightness = parseInt(document.getElementById('adj-brightness')?.value || 0);
+    const contrast = parseInt(document.getElementById('adj-contrast')?.value || 0);
+    const blur = parseInt(document.getElementById('adj-blur')?.value || 0);
+    const sharpen = parseInt(document.getElementById('adj-sharpen')?.value || 0);
+
+    if (brightness === 0 && contrast === 0 && blur === 0 && sharpen === 0) {
+        showMessage('No adjustments to apply');
+        return;
+    }
+
+    // Apply to main canvas
+    const mainCanvas = document.getElementById('main-canvas');
+    const ctx = mainCanvas.getContext('2d');
+
+    // Get image data
+    const imageData = ctx.getImageData(0, 0, mainCanvas.width, mainCanvas.height);
+    const data = imageData.data;
+
+    // Apply brightness and contrast
+    const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+
+    for (let i = 0; i < data.length; i += 4) {
+        // Brightness
+        data[i] = Math.min(255, Math.max(0, data[i] + brightness));
+        data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + brightness));
+        data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + brightness));
+
+        // Contrast
+        data[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128));
+        data[i + 1] = Math.min(255, Math.max(0, factor * (data[i + 1] - 128) + 128));
+        data[i + 2] = Math.min(255, Math.max(0, factor * (data[i + 2] - 128) + 128));
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
+    // Apply blur using CSS filter temporarily
+    if (blur > 0) {
+        ctx.filter = `blur(${blur}px)`;
+        ctx.drawImage(mainCanvas, 0, 0);
+        ctx.filter = 'none';
+    }
+
+    showMessage('Adjustments applied');
+}
+
+// Draw new shapes: Triangle, Star, Polygon, Diamond
+function drawTriangle(ctx, startX, startY, endX, endY, fill = false) {
+    const width = endX - startX;
+    const height = endY - startY;
+
+    ctx.beginPath();
+    ctx.moveTo(startX + width / 2, startY); // Top point
+    ctx.lineTo(startX, endY); // Bottom left
+    ctx.lineTo(endX, endY); // Bottom right
+    ctx.closePath();
+
+    if (fill) ctx.fill();
+    ctx.stroke();
+}
+
+function drawStar(ctx, centerX, centerY, outerRadius, innerRadius, points, fill = false) {
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+        const radius = i % 2 === 0 ? outerRadius : innerRadius;
+        const angle = (i * Math.PI) / points - Math.PI / 2;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    if (fill) ctx.fill();
+    ctx.stroke();
+}
+
+function drawPolygon(ctx, centerX, centerY, radius, sides, fill = false) {
+    ctx.beginPath();
+    for (let i = 0; i < sides; i++) {
+        const angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    if (fill) ctx.fill();
+    ctx.stroke();
+}
+
+function drawDiamond(ctx, startX, startY, endX, endY, fill = false) {
+    const centerX = (startX + endX) / 2;
+    const centerY = (startY + endY) / 2;
+    const halfWidth = Math.abs(endX - startX) / 2;
+    const halfHeight = Math.abs(endY - startY) / 2;
+
+    ctx.beginPath();
+    ctx.moveTo(centerX, startY); // Top
+    ctx.lineTo(endX, centerY); // Right
+    ctx.lineTo(centerX, endY); // Bottom
+    ctx.lineTo(startX, centerY); // Left
+    ctx.closePath();
+
+    if (fill) ctx.fill();
+    ctx.stroke();
+}
+
+// Eraser functionality
+function eraseAtPoint(x, y, radius) {
+    // Find and remove annotations that intersect with eraser
+    for (let i = annotations.length - 1; i >= 0; i--) {
+        const annotation = annotations[i];
+        if (isPointNearAnnotation(x, y, annotation, radius)) {
+            annotations.splice(i, 1);
+            if (selectedAnnotation === i) selectedAnnotation = null;
+            else if (selectedAnnotation > i) selectedAnnotation--;
+        }
+    }
+    redrawAnnotations();
+}
+
+function isPointNearAnnotation(x, y, annotation, radius) {
+    switch (annotation.type) {
+        case 'pen':
+            return annotation.path.some(point =>
+                Math.sqrt(Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2)) < radius
+            );
+        case 'line':
+        case 'arrow':
+            return distanceToLine(x, y, annotation.start, annotation.end) < radius;
+        case 'circle':
+            const annotRadius = Math.sqrt(
+                Math.pow(annotation.end.x - annotation.start.x, 2) +
+                Math.pow(annotation.end.y - annotation.start.y, 2)
+            );
+            const distToCenter = Math.sqrt(
+                Math.pow(x - annotation.start.x, 2) +
+                Math.pow(y - annotation.start.y, 2)
+            );
+            return Math.abs(distToCenter - annotRadius) < radius;
+        case 'rectangle':
+        case 'triangle':
+        case 'diamond':
+        case 'polygon':
+        case 'star':
+            const bounds = getShapeBounds(annotation);
+            return x >= bounds.minX - radius && x <= bounds.minX + bounds.width + radius &&
+                   y >= bounds.minY - radius && y <= bounds.minY + bounds.height + radius;
+        case 'text':
+            const textWidth = (annotation.text || '').length * (annotation.size || 16) * 0.6;
+            const textHeight = annotation.size || 16;
+            return x >= annotation.x - radius && x <= annotation.x + textWidth + radius &&
+                   y >= annotation.y - textHeight - radius && y <= annotation.y + radius;
+        default:
+            return false;
+    }
+}
+
+function distanceToLine(px, py, start, end) {
+    const A = px - start.x;
+    const B = py - start.y;
+    const C = end.x - start.x;
+    const D = end.y - start.y;
+
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    let param = -1;
+
+    if (lenSq !== 0) param = dot / lenSq;
+
+    let xx, yy;
+    if (param < 0) { xx = start.x; yy = start.y; }
+    else if (param > 1) { xx = end.x; yy = end.y; }
+    else { xx = start.x + param * C; yy = start.y + param * D; }
+
+    return Math.sqrt(Math.pow(px - xx, 2) + Math.pow(py - yy, 2));
+}
+
+// Brush-style eraser - removes portions of pen strokes instead of entire objects
+function brushEraseAtPoint(x, y, radius) {
+    let changed = false;
+
+    for (let i = annotations.length - 1; i >= 0; i--) {
+        const annotation = annotations[i];
+
+        // Only brush-erase pen strokes (they have paths we can modify)
+        if (annotation.type === 'pen' && annotation.path) {
+            // Find points within the eraser radius and remove them
+            const originalLength = annotation.path.length;
+            const newPath = [];
+            let inErasedSection = false;
+            let pathSegments = [];
+            let currentSegment = [];
+
+            for (let j = 0; j < annotation.path.length; j++) {
+                const point = annotation.path[j];
+                const dist = Math.sqrt(Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2));
+
+                if (dist <= radius) {
+                    // This point is being erased
+                    inErasedSection = true;
+                    if (currentSegment.length > 1) {
+                        pathSegments.push([...currentSegment]);
+                    }
+                    currentSegment = [];
+                } else {
+                    // Keep this point
+                    currentSegment.push(point);
+                }
+            }
+
+            // Don't forget the last segment
+            if (currentSegment.length > 1) {
+                pathSegments.push(currentSegment);
+            }
+
+            // If we have segments, update or split the annotation
+            if (pathSegments.length === 0) {
+                // Entire path was erased
+                annotations.splice(i, 1);
+                if (selectedAnnotation === i) selectedAnnotation = null;
+                else if (selectedAnnotation > i) selectedAnnotation--;
+                changed = true;
+            } else if (pathSegments.length === 1 && pathSegments[0].length < originalLength) {
+                // Single segment remains (some points were erased)
+                annotation.path = pathSegments[0];
+                changed = true;
+            } else if (pathSegments.length > 1) {
+                // Path was split into multiple segments - create new annotations for each
+                annotation.path = pathSegments[0]; // Keep first segment in original
+
+                // Add new annotations for remaining segments
+                for (let k = 1; k < pathSegments.length; k++) {
+                    annotations.splice(i + k, 0, {
+                        type: 'pen',
+                        path: pathSegments[k],
+                        color: annotation.color,
+                        width: annotation.width,
+                        opacity: annotation.opacity,
+                        id: Date.now() + k
+                    });
+                }
+                changed = true;
+            }
+        }
+    }
+
+    if (changed) {
+        redrawAnnotations();
+    }
+}
+
+// Check if the background/canvas layer is locked
+function isCanvasLocked() {
+    const backgroundLayer = layers.find(l => l.id === 0);
+    return backgroundLayer && backgroundLayer.locked;
+}
+
+// Paint Bucket / Fill Tool
+function floodFill(startX, startY, fillColor) {
+    // Check if canvas is locked
+    if (isCanvasLocked()) {
+        showMessage('Canvas is locked. Unlock the Background layer to use this tool.');
+        return;
+    }
+
+    const mainCanvas = document.getElementById('main-canvas');
+    const ctx = mainCanvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, mainCanvas.width, mainCanvas.height);
+    const data = imageData.data;
+
+    const startPos = (Math.floor(startY) * mainCanvas.width + Math.floor(startX)) * 4;
+    const startR = data[startPos];
+    const startG = data[startPos + 1];
+    const startB = data[startPos + 2];
+
+    // Parse fill color
+    const fillR = parseInt(fillColor.slice(1, 3), 16);
+    const fillG = parseInt(fillColor.slice(3, 5), 16);
+    const fillB = parseInt(fillColor.slice(5, 7), 16);
+
+    // Don't fill if same color
+    if (startR === fillR && startG === fillG && startB === fillB) return;
+
+    const stack = [[Math.floor(startX), Math.floor(startY)]];
+    const visited = new Set();
+    const tolerance = 32;
+
+    while (stack.length > 0 && stack.length < 100000) {
+        const [x, y] = stack.pop();
+        const key = `${x},${y}`;
+
+        if (visited.has(key)) continue;
+        if (x < 0 || x >= mainCanvas.width || y < 0 || y >= mainCanvas.height) continue;
+
+        const pos = (y * mainCanvas.width + x) * 4;
+        const r = data[pos];
+        const g = data[pos + 1];
+        const b = data[pos + 2];
+
+        if (Math.abs(r - startR) > tolerance ||
+            Math.abs(g - startG) > tolerance ||
+            Math.abs(b - startB) > tolerance) continue;
+
+        visited.add(key);
+
+        data[pos] = fillR;
+        data[pos + 1] = fillG;
+        data[pos + 2] = fillB;
+        data[pos + 3] = 255 * drawingOpacity;
+
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    showMessage('Area filled');
+}
+
+// Blur tool for drawing on specific areas
+function applyBlurAtPoint(x, y, radius, intensity) {
+    // Check if canvas is locked
+    if (isCanvasLocked()) {
+        showMessage('Canvas is locked. Unlock the Background layer to use this tool.');
+        return;
+    }
+
+    const mainCanvas = document.getElementById('main-canvas');
+    const ctx = mainCanvas.getContext('2d');
+
+    // Create temporary canvas for blur effect
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = radius * 2;
+    tempCanvas.height = radius * 2;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    // Copy area from main canvas
+    tempCtx.drawImage(mainCanvas,
+        x - radius, y - radius, radius * 2, radius * 2,
+        0, 0, radius * 2, radius * 2
+    );
+
+    // Apply blur
+    tempCtx.filter = `blur(${intensity}px)`;
+    tempCtx.drawImage(tempCanvas, 0, 0);
+    tempCtx.filter = 'none';
+
+    // Draw back with circular mask
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(tempCanvas, x - radius, y - radius);
+    ctx.restore();
+}
+
 // --- Drawing Tools Functions - COMPLETELY FIXED ---
 function setupDrawingTools() {
     const closeToolsBtn = document.getElementById('close-tools-btn');
@@ -2114,6 +3087,9 @@ function setupDrawingTools() {
     const deleteSelectedBtn = document.getElementById('delete-selected-btn');
     const palette = document.getElementById('drawing-tools-palette');
 
+    // Initialize enhanced tools
+    setupEnhancedDrawingTools();
+
     // Make palette draggable
     setupPaletteDragging();
 
@@ -2122,24 +3098,28 @@ function setupDrawingTools() {
     closeToolsBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const drawingToolsBtn = document.getElementById('drawing-tools-btn');
-        
+
         // Add hidden class
         palette.classList.add('hidden');
-        
+
         // IMPORTANT: Also set display to none to actually hide it
         palette.style.setProperty('display', 'none', 'important');
-        
+
         if (drawingToolsBtn) {
             drawingToolsBtn.classList.remove('active');
         }
-        isDrawingToolsActive = false;
+
+        // Keep annotations interactive - switch to pointer mode instead of fully deactivating
+        // This allows users to still select and delete annotations when palette is closed
         currentDrawingTool = 'pointer';
+        // Keep isDrawingToolsActive TRUE so annotations remain selectable
+        // User can still click to select and press Delete key to remove
         updateDrawingCursor();
-        
+
         console.log('Drawing tools palette closed via X button');
-        showMessage('Drawing tools deactivated.');
+        showMessage('Tools closed. Click drawings to select, press Delete to remove.');
     });
 }
 
@@ -2160,7 +3140,15 @@ function setupDrawingTools() {
             // Set the current drawing tool
             currentDrawingTool = this.dataset.tool;
             selectedAnnotation = null; // Deselect when changing tools
-            
+
+            // CRITICAL: Reset drawing state when switching tools
+            // This prevents the brush from "activating" without a click
+            isDrawingAnnotation = false;
+            drawingStartPoint = null;
+            currentAnnotationPath = [];
+            isDraggingAnnotation = false;
+            draggingEndpoint = null;
+
             // CRITICAL FIX: Keep drawing tools active for all tools including pointer
             // The palette is still open, so isDrawingToolsActive should remain true
             isDrawingToolsActive = true;
@@ -2181,6 +3169,18 @@ function setupDrawingTools() {
                 case 'pen':
                     toolMessage = 'Pen tool selected. Click and drag to draw freehand.';
                     break;
+                case 'eraser':
+                    toolMessage = 'Object Eraser - Click to remove entire drawings.';
+                    break;
+                case 'eraser-brush':
+                    toolMessage = 'Brush Eraser - Click and drag to erase parts of pen strokes.';
+                    break;
+                case 'fill':
+                    toolMessage = 'Fill tool selected. Click on an area to fill it with color.';
+                    break;
+                case 'blur':
+                    toolMessage = 'Blur tool selected. Click and drag to blur areas.';
+                    break;
                 case 'line':
                     toolMessage = 'Line tool selected. Click and drag to draw straight lines.';
                     break;
@@ -2192,6 +3192,18 @@ function setupDrawingTools() {
                     break;
                 case 'rectangle':
                     toolMessage = 'Rectangle tool selected. Click and drag to draw rectangles.';
+                    break;
+                case 'triangle':
+                    toolMessage = 'Triangle tool selected. Click and drag to draw triangles.';
+                    break;
+                case 'star':
+                    toolMessage = 'Star tool selected. Click and drag to draw stars.';
+                    break;
+                case 'polygon':
+                    toolMessage = `Polygon tool selected (${polygonSides} sides). Click and drag to draw.`;
+                    break;
+                case 'diamond':
+                    toolMessage = 'Diamond tool selected. Click and drag to draw diamonds.';
                     break;
                 case 'text':
                     toolMessage = 'Text tool selected. Click on canvas to add text.';
@@ -2272,23 +3284,54 @@ function setupDrawingTools() {
     // Add function to update tool panel when annotation is selected
     function updateToolPanelForAnnotation(annotation) {
         if (!annotation) return;
-        
+
         // Update color picker
         if (colorPicker) {
             colorPicker.value = annotation.color || drawingColor;
             drawingColor = annotation.color || drawingColor;
         }
-        
+
         // Update stroke width
         if (strokeWidthSlider) {
             strokeWidthSlider.value = annotation.width || strokeWidth;
             strokeWidth = annotation.width || strokeWidth;
+            const strokeValue = document.getElementById('stroke-width-value');
+            if (strokeValue) strokeValue.textContent = annotation.width || strokeWidth;
         }
-        
+
+        // Update opacity
+        const opacitySlider = document.getElementById('drawing-opacity');
+        const opacityValue = document.getElementById('opacity-value');
+        if (opacitySlider) {
+            const opacity = annotation.opacity !== undefined ? annotation.opacity * 100 : 100;
+            opacitySlider.value = opacity;
+            drawingOpacity = annotation.opacity !== undefined ? annotation.opacity : 1;
+            if (opacityValue) opacityValue.textContent = Math.round(opacity);
+        }
+
+        // Update fill shape checkbox for fillable shapes
+        const shapeFillToggle = document.getElementById('shape-fill-toggle');
+        if (shapeFillToggle) {
+            const fillableShapes = ['circle', 'rectangle', 'triangle', 'star', 'polygon', 'diamond'];
+            if (fillableShapes.includes(annotation.type)) {
+                shapeFillToggle.checked = annotation.fill || false;
+                shapeFillEnabled = annotation.fill || false;
+            }
+        }
+
+        // Update polygon sides if it's a polygon
+        const polygonSidesInput = document.getElementById('polygon-sides');
+        if (polygonSidesInput && annotation.type === 'polygon') {
+            polygonSidesInput.value = annotation.sides || 6;
+            polygonSides = annotation.sides || 6;
+        }
+
         // Update font size for text annotations
         if (fontSizeSlider && annotation.type === 'text') {
             fontSizeSlider.value = annotation.size || fontSize;
             fontSize = annotation.size || fontSize;
+            const fontValue = document.getElementById('font-size-value');
+            if (fontValue) fontValue.textContent = annotation.size || fontSize;
         }
     }
 
@@ -2421,6 +3464,18 @@ function updateDrawingCursor() {
                 drawingCanvas.style.cursor = 'crosshair';
                 drawingCanvas.classList.add('cursor-pen');
                 break;
+            case 'eraser':
+                drawingCanvas.style.cursor = 'crosshair';
+                drawingCanvas.classList.add('cursor-eraser');
+                break;
+            case 'fill':
+                drawingCanvas.style.cursor = 'crosshair';
+                drawingCanvas.classList.add('cursor-fill');
+                break;
+            case 'blur':
+                drawingCanvas.style.cursor = 'crosshair';
+                drawingCanvas.classList.add('cursor-blur');
+                break;
             case 'line':
                 drawingCanvas.style.cursor = 'crosshair';
                 drawingCanvas.classList.add('cursor-crosshair');
@@ -2434,6 +3489,10 @@ function updateDrawingCursor() {
                 drawingCanvas.classList.add('cursor-circle');
                 break;
             case 'rectangle':
+            case 'triangle':
+            case 'diamond':
+            case 'polygon':
+            case 'star':
                 drawingCanvas.style.cursor = 'crosshair';
                 drawingCanvas.classList.add('cursor-rectangle');
                 break;
@@ -2526,20 +3585,41 @@ function handleDrawingMouseDown(e) {
     const x = coords.x;
     const y = coords.y;
     
-    // Check for annotation selection and dragging first
+    // Check for endpoint dragging on lines/arrows first (before full annotation selection)
+    const endpointInfo = getLineEndpointAtPoint(x, y);
+    if (endpointInfo !== null) {
+        selectedAnnotation = endpointInfo.annotationIndex;
+        const annotation = annotations[selectedAnnotation];
+
+        // Update tool panel controls
+        updateToolPanelForAnnotation(annotation);
+
+        // Start dragging just the endpoint
+        isDraggingAnnotation = true;
+        draggingEndpoint = endpointInfo.endpoint; // 'start' or 'end'
+        dragStartAnnotation = { x, y };
+        dragOriginalAnnotation = JSON.parse(JSON.stringify(annotation));
+
+        redrawAnnotations();
+        showMessage(`Dragging ${endpointInfo.endpoint} point. Release to place.`);
+        return;
+    }
+
+    // Check for annotation selection and dragging
     const clickedAnnotation = getAnnotationAtPoint(x, y);
     if (clickedAnnotation !== null) {
         selectedAnnotation = clickedAnnotation;
         const annotation = annotations[selectedAnnotation];
-        
+
         // Update tool panel controls
         updateToolPanelForAnnotation(annotation);
-        
-        // Start dragging the selected annotation
+
+        // Start dragging the selected annotation (whole shape)
         isDraggingAnnotation = true;
+        draggingEndpoint = null; // Dragging whole shape, not just an endpoint
         dragStartAnnotation = { x, y };
         dragOriginalAnnotation = JSON.parse(JSON.stringify(annotation)); // Deep copy
-        
+
         redrawAnnotations();
         showMessage('Dragging annotation. Release to place.');
         return;
@@ -2551,10 +3631,35 @@ function handleDrawingMouseDown(e) {
         redrawAnnotations();
         return;
     }
-    
+
+    // Handle special tools
+    if (currentDrawingTool === 'eraser') {
+        eraseAtPoint(x, y, strokeWidth * 2);
+        isDrawingAnnotation = true; // Enable continuous erasing
+        return;
+    }
+
+    if (currentDrawingTool === 'eraser-brush') {
+        brushEraseAtPoint(x, y, strokeWidth * 2);
+        isDrawingAnnotation = true; // Enable continuous brush erasing
+        drawingStartPoint = { x, y };
+        return;
+    }
+
+    if (currentDrawingTool === 'fill') {
+        floodFill(x, y, drawingColor);
+        return;
+    }
+
+    if (currentDrawingTool === 'blur') {
+        applyBlurAtPoint(x, y, strokeWidth * 2, 3);
+        isDrawingAnnotation = true; // Enable continuous blur
+        return;
+    }
+
     // Start creating new annotation for other tools
     drawingStartPoint = { x, y };
-    
+
     if (currentDrawingTool === 'pen') {
         isDrawingAnnotation = true;
         currentAnnotationPath = [{ x, y }];
@@ -2573,8 +3678,21 @@ function handleDrawingMouseMove(e) {
         const annotation = annotations[selectedAnnotation];
         const deltaX = x - dragStartAnnotation.x;
         const deltaY = y - dragStartAnnotation.y;
-        
-        // Move annotation based on type
+
+        // Check if we're dragging just an endpoint (for lines/arrows)
+        if (draggingEndpoint && (annotation.type === 'line' || annotation.type === 'arrow')) {
+            if (draggingEndpoint === 'start') {
+                // Only move the start point
+                annotation.start = { x, y };
+            } else if (draggingEndpoint === 'end') {
+                // Only move the end point
+                annotation.end = { x, y };
+            }
+            redrawAnnotations();
+            return;
+        }
+
+        // Move entire annotation based on type
         if (annotation.type === 'text') {
             annotation.x = dragOriginalAnnotation.x + deltaX;
             annotation.y = dragOriginalAnnotation.y + deltaY;
@@ -2583,7 +3701,7 @@ function handleDrawingMouseMove(e) {
                 x: point.x + deltaX,
                 y: point.y + deltaY
             }));
-        } else if (['line', 'arrow', 'circle', 'rectangle'].includes(annotation.type)) {
+        } else if (['line', 'arrow', 'circle', 'rectangle', 'triangle', 'star', 'polygon', 'diamond'].includes(annotation.type)) {
             annotation.start = {
                 x: dragOriginalAnnotation.start.x + deltaX,
                 y: dragOriginalAnnotation.start.y + deltaY
@@ -2593,17 +3711,35 @@ function handleDrawingMouseMove(e) {
                 y: dragOriginalAnnotation.end.y + deltaY
             };
         }
-        
+
         redrawAnnotations();
         return;
     }
-    
+
+    // Handle eraser dragging
+    if (isDrawingAnnotation && currentDrawingTool === 'eraser') {
+        eraseAtPoint(x, y, strokeWidth * 2);
+        return;
+    }
+
+    // Handle brush eraser dragging
+    if (isDrawingAnnotation && currentDrawingTool === 'eraser-brush') {
+        brushEraseAtPoint(x, y, strokeWidth * 2);
+        return;
+    }
+
+    // Handle blur dragging
+    if (isDrawingAnnotation && currentDrawingTool === 'blur') {
+        applyBlurAtPoint(x, y, strokeWidth * 2, 3);
+        return;
+    }
+
     // Handle pen drawing
     if (isDrawingAnnotation && currentDrawingTool === 'pen') {
         currentAnnotationPath.push({ x, y });
         redrawAnnotations();
         drawCurrentPath();
-    } else if (drawingStartPoint && ['line', 'arrow', 'circle', 'rectangle'].includes(currentDrawingTool)) {
+    } else if (drawingStartPoint && ['line', 'arrow', 'circle', 'rectangle', 'triangle', 'star', 'polygon', 'diamond'].includes(currentDrawingTool)) {
         // Draw preview
         redrawAnnotations();
         drawShapePreview(drawingStartPoint, { x, y });
@@ -2618,6 +3754,7 @@ function handleDrawingMouseUp(e) {
         isDraggingAnnotation = false;
         dragStartAnnotation = null;
         dragOriginalAnnotation = null;
+        draggingEndpoint = null; // Reset endpoint dragging state
         showMessage('Annotation moved.');
         return;
     }
@@ -2628,6 +3765,13 @@ function handleDrawingMouseUp(e) {
     const x = coords.x;
     const y = coords.y;
     
+    // Handle eraser/blur/eraser-brush mouse up
+    if (currentDrawingTool === 'eraser' || currentDrawingTool === 'blur' || currentDrawingTool === 'eraser-brush') {
+        isDrawingAnnotation = false;
+        drawingStartPoint = null;
+        return;
+    }
+
     if (currentDrawingTool === 'pen' && isDrawingAnnotation) {
         // Finish pen drawing
         if (currentAnnotationPath.length > 1) {
@@ -2636,13 +3780,14 @@ function handleDrawingMouseUp(e) {
                 path: [...currentAnnotationPath],
                 color: drawingColor,
                 width: strokeWidth,
+                opacity: drawingOpacity,
                 id: Date.now()
             });
             showMessage('Pen drawing created. Click to select and move.');
         }
         currentAnnotationPath = [];
         isDrawingAnnotation = false;
-    } else if (['line', 'arrow', 'circle', 'rectangle'].includes(currentDrawingTool)) {
+    } else if (['line', 'arrow', 'circle', 'rectangle', 'triangle', 'star', 'polygon', 'diamond'].includes(currentDrawingTool)) {
         // Only create shape if there's significant movement
         const distance = Math.sqrt(Math.pow(x - drawingStartPoint.x, 2) + Math.pow(y - drawingStartPoint.y, 2));
         if (distance > 5) {
@@ -2652,13 +3797,16 @@ function handleDrawingMouseUp(e) {
                 end: { x, y },
                 color: drawingColor,
                 width: strokeWidth,
+                opacity: drawingOpacity,
+                fill: shapeFillEnabled,
+                sides: polygonSides, // For polygon tool
                 id: Date.now()
             };
             annotations.push(annotation);
             showMessage(`${currentDrawingTool.charAt(0).toUpperCase() + currentDrawingTool.slice(1)} created. Click to select and move.`);
         }
     }
-    
+
     drawingStartPoint = null;
     redrawAnnotations();
 }
@@ -2773,156 +3921,292 @@ function isPointNearAnnotation(x, y, annotation) {
             const textHeight = annotation.size || 16;
             return (x >= annotation.x - threshold && x <= annotation.x + textWidth + threshold &&
                     y >= annotation.y - textHeight && y <= annotation.y + threshold);
+        case 'triangle':
+        case 'star':
+        case 'polygon':
+        case 'diamond':
+            // Use bounding box for these shapes
+            const shapeRect = {
+                left: Math.min(annotation.start.x, annotation.end.x),
+                right: Math.max(annotation.start.x, annotation.end.x),
+                top: Math.min(annotation.start.y, annotation.end.y),
+                bottom: Math.max(annotation.start.y, annotation.end.y)
+            };
+            return (x >= shapeRect.left - threshold && x <= shapeRect.right + threshold &&
+                    y >= shapeRect.top - threshold && y <= shapeRect.bottom + threshold);
         default:
             return false;
     }
 }
 
+// Check if point is near a line/arrow endpoint (for endpoint-specific dragging)
+function getLineEndpointAtPoint(x, y) {
+    const endpointThreshold = 12; // Slightly larger threshold for easier endpoint grabbing
+
+    for (let i = annotations.length - 1; i >= 0; i--) {
+        const annotation = annotations[i];
+
+        // Only check lines and arrows
+        if (annotation.type !== 'line' && annotation.type !== 'arrow') continue;
+
+        // Check distance to start point
+        const distToStart = Math.sqrt(
+            Math.pow(x - annotation.start.x, 2) +
+            Math.pow(y - annotation.start.y, 2)
+        );
+
+        // Check distance to end point
+        const distToEnd = Math.sqrt(
+            Math.pow(x - annotation.end.x, 2) +
+            Math.pow(y - annotation.end.y, 2)
+        );
+
+        // Return whichever endpoint is closer (if within threshold)
+        if (distToStart <= endpointThreshold && distToStart <= distToEnd) {
+            return { annotationIndex: i, endpoint: 'start' };
+        }
+        if (distToEnd <= endpointThreshold) {
+            return { annotationIndex: i, endpoint: 'end' };
+        }
+    }
+
+    return null;
+}
+
 function createTextInput(x, y) {
-    // Convert canvas coordinates to screen coordinates
+    // Convert canvas coordinates to screen coordinates for inline input
     const rect = drawingCanvas.getBoundingClientRect();
     const screenX = (x / drawingCanvas.width) * rect.width + rect.left;
     const screenY = (y / drawingCanvas.height) * rect.height + rect.top;
-    
-    // Adjust position to keep input visible
-    const adjustedX = Math.min(screenX, window.innerWidth - 320);
-    const adjustedY = Math.max(20, Math.min(screenY, window.innerHeight - 100));
-    
-    const overlay = document.createElement('div');
-    overlay.className = 'text-input-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.left = adjustedX + 'px';
-    overlay.style.top = adjustedY + 'px';
-    overlay.style.zIndex = '100000';
-    overlay.style.backgroundColor = 'white';
-    overlay.style.border = '2px solid #333';
-    overlay.style.borderRadius = '4px';
-    overlay.style.padding = '10px';
-    overlay.style.boxShadow = '0 2px 10px rgba(0,0,0,0.3)';
-    
+
+    // Available fonts
+    const fonts = [
+        'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana',
+        'Courier New', 'Comic Sans MS', 'Impact', 'Trebuchet MS', 'Palatino'
+    ];
+
+    // Available font sizes
+    const sizes = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 56, 64, 72];
+
+    // Current settings
+    let currentFont = 'Arial';
+    let currentSize = fontSize || 16;
+    let currentColor = drawingColor || '#000000';
+
+    // Create container for text input and controls
+    const container = document.createElement('div');
+    container.className = 'text-input-container';
+    container.style.cssText = `
+        position: fixed;
+        left: ${screenX}px;
+        top: ${screenY - 10}px;
+        z-index: 100001;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    `;
+
+    // Create the text input
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = 'Enter text...';
-    input.style.fontSize = fontSize + 'px';
-    input.style.width = '250px';
-    input.style.padding = '8px';
-    input.style.border = '1px solid #ccc';
-    input.style.borderRadius = '3px';
-    input.style.marginBottom = '8px';
-    input.style.display = 'block';
-    
-    // Font controls container
-    const fontControls = document.createElement('div');
-    fontControls.style.display = 'flex';
-    fontControls.style.gap = '10px';
-    fontControls.style.marginBottom = '8px';
-    fontControls.style.alignItems = 'center';
-    
-    // Font family selector
-    const fontLabel = document.createElement('label');
-    fontLabel.textContent = 'Font:';
-    fontLabel.style.fontSize = '12px';
-    fontLabel.style.fontWeight = '500';
-    
+    input.placeholder = 'Type here...';
+    input.className = 'inline-text-input';
+    input.style.cssText = `
+        font-size: ${currentSize}px;
+        font-family: ${currentFont}, sans-serif;
+        color: ${currentColor};
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #333;
+        border-radius: 4px;
+        padding: 8px 12px;
+        min-width: 200px;
+        outline: none;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+    `;
+
+    // Create controls bar
+    const controls = document.createElement('div');
+    controls.className = 'text-controls-bar';
+    controls.style.cssText = `
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        background: #2a2a2a;
+        padding: 6px 8px;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    `;
+
+    // Font family dropdown
     const fontSelect = document.createElement('select');
-    fontSelect.style.padding = '4px';
-    fontSelect.style.border = '1px solid #ccc';
-    fontSelect.style.borderRadius = '3px';
-    fontSelect.style.flex = '1';
-    
-    const fonts = ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Comic Sans MS', 'Trebuchet MS', 'Impact'];
+    fontSelect.style.cssText = `
+        padding: 4px 8px;
+        border: 1px solid #555;
+        border-radius: 3px;
+        background: #3a3a3a;
+        color: #fff;
+        font-size: 12px;
+        cursor: pointer;
+        min-width: 110px;
+    `;
     fonts.forEach(font => {
         const option = document.createElement('option');
         option.value = font;
         option.textContent = font;
+        option.style.fontFamily = font;
+        if (font === currentFont) option.selected = true;
         fontSelect.appendChild(option);
     });
-    
-    // Font size number input
-    const sizeLabel = document.createElement('label');
-    sizeLabel.textContent = 'Size:';
-    sizeLabel.style.fontSize = '12px';
-    sizeLabel.style.fontWeight = '500';
-    
-    const fontSizeInput = document.createElement('input');
-    fontSizeInput.type = 'number';
-    fontSizeInput.value = fontSize;
-    fontSizeInput.min = '8';
-    fontSizeInput.max = '200';
-    fontSizeInput.style.width = '60px';
-    fontSizeInput.style.padding = '4px';
-    fontSizeInput.style.border = '1px solid #ccc';
-    fontSizeInput.style.borderRadius = '3px';
-    
-    // Update input preview when font changes
     fontSelect.addEventListener('change', () => {
-        input.style.fontFamily = fontSelect.value;
+        currentFont = fontSelect.value;
+        input.style.fontFamily = currentFont + ', sans-serif';
+        input.focus();
     });
-    
-    fontSizeInput.addEventListener('input', () => {
-        input.style.fontSize = fontSizeInput.value + 'px';
+
+    // Font size dropdown
+    const sizeSelect = document.createElement('select');
+    sizeSelect.style.cssText = `
+        padding: 4px 8px;
+        border: 1px solid #555;
+        border-radius: 3px;
+        background: #3a3a3a;
+        color: #fff;
+        font-size: 12px;
+        cursor: pointer;
+        width: 60px;
+    `;
+    sizes.forEach(size => {
+        const option = document.createElement('option');
+        option.value = size;
+        option.textContent = size + 'px';
+        if (size === currentSize) option.selected = true;
+        sizeSelect.appendChild(option);
     });
-    
-    fontControls.appendChild(fontLabel);
-    fontControls.appendChild(fontSelect);
-    fontControls.appendChild(sizeLabel);
-    fontControls.appendChild(fontSizeInput);
-    
-    const controls = document.createElement('div');
-    controls.className = 'text-controls';
-    controls.style.display = 'flex';
-    controls.style.gap = '5px';
-    
-    const okBtn = document.createElement('button');
-    okBtn.textContent = 'Add Text';
-    okBtn.style.padding = '6px 12px';
-    okBtn.style.backgroundColor = '#4CAF50';
-    okBtn.style.color = 'white';
-    okBtn.style.border = 'none';
-    okBtn.style.borderRadius = '3px';
-    okBtn.style.cursor = 'pointer';
-    okBtn.addEventListener('click', () => {
+    sizeSelect.addEventListener('change', () => {
+        currentSize = parseInt(sizeSelect.value);
+        input.style.fontSize = currentSize + 'px';
+        input.focus();
+    });
+
+    // Color picker
+    const colorPicker = document.createElement('input');
+    colorPicker.type = 'color';
+    colorPicker.value = currentColor;
+    colorPicker.style.cssText = `
+        width: 30px;
+        height: 26px;
+        border: 1px solid #555;
+        border-radius: 3px;
+        cursor: pointer;
+        padding: 0;
+        background: transparent;
+    `;
+    colorPicker.addEventListener('input', () => {
+        currentColor = colorPicker.value;
+        input.style.color = currentColor;
+        input.style.borderColor = currentColor;
+    });
+    colorPicker.addEventListener('change', () => {
+        input.focus();
+    });
+
+    // Confirm button
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = '✓';
+    confirmBtn.title = 'Add Text (Enter)';
+    confirmBtn.style.cssText = `
+        padding: 4px 10px;
+        border: none;
+        border-radius: 3px;
+        background: #4CAF50;
+        color: white;
+        font-size: 14px;
+        cursor: pointer;
+        font-weight: bold;
+    `;
+
+    // Cancel button
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '✕';
+    cancelBtn.title = 'Cancel (Escape)';
+    cancelBtn.style.cssText = `
+        padding: 4px 10px;
+        border: none;
+        border-radius: 3px;
+        background: #f44336;
+        color: white;
+        font-size: 14px;
+        cursor: pointer;
+        font-weight: bold;
+    `;
+
+    // Assemble controls
+    controls.appendChild(fontSelect);
+    controls.appendChild(sizeSelect);
+    controls.appendChild(colorPicker);
+    controls.appendChild(confirmBtn);
+    controls.appendChild(cancelBtn);
+
+    // Assemble container
+    container.appendChild(input);
+    container.appendChild(controls);
+
+    document.body.appendChild(container);
+    input.focus();
+
+    // Handle text submission
+    const submitText = () => {
         if (input.value.trim()) {
             annotations.push({
                 type: 'text',
                 x: x,
                 y: y,
                 text: input.value,
-                color: drawingColor,
-                size: parseInt(fontSizeInput.value) || fontSize,
-                font: fontSelect.value || 'Arial',
+                color: currentColor,
+                size: currentSize,
+                font: currentFont,
                 bold: false,
                 italic: false,
+                opacity: drawingOpacity,
                 id: Date.now()
             });
             redrawAnnotations();
             showMessage('Text added.');
         }
-        overlay.remove();
+        container.remove();
+    };
+
+    const cancelInput = () => {
+        container.remove();
+    };
+
+    // Button click handlers
+    confirmBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        submitText();
     });
-    
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.padding = '6px 12px';
-    cancelBtn.style.backgroundColor = '#f44336';
-    cancelBtn.style.color = 'white';
-    cancelBtn.style.border = 'none';
-    cancelBtn.style.borderRadius = '3px';
-    cancelBtn.style.cursor = 'pointer';
-    cancelBtn.addEventListener('click', () => overlay.remove());
-    
-    controls.appendChild(okBtn);
-    controls.appendChild(cancelBtn);
-    overlay.appendChild(input);
-    overlay.appendChild(fontControls);
-    overlay.appendChild(controls);
-    
-    document.body.appendChild(overlay);
-    input.focus();
-    
+
+    cancelBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cancelInput();
+    });
+
+    // Handle keyboard events
     input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') okBtn.click();
-        if (e.key === 'Escape') cancelBtn.click();
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submitText();
+        }
+        if (e.key === 'Escape') {
+            cancelInput();
+        }
+    });
+
+    // Prevent container clicks from bubbling
+    container.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
     });
 }
 
@@ -2996,14 +4280,19 @@ function drawCurrentPath() {
 
 function drawShapePreview(start, end) {
     if (!drawingCtx) return;
-    
+
     drawingCtx.save();
     drawingCtx.strokeStyle = drawingColor;
+    drawingCtx.fillStyle = drawingColor;
     drawingCtx.lineWidth = strokeWidth;
     drawingCtx.lineCap = 'round';
     drawingCtx.globalAlpha = 0.7;
     drawingCtx.setLineDash([5, 5]);
-    
+
+    const centerX = (start.x + end.x) / 2;
+    const centerY = (start.y + end.y) / 2;
+    const radius = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
+
     switch (currentDrawingTool) {
         case 'line':
             drawingCtx.beginPath();
@@ -3018,9 +4307,9 @@ function drawShapePreview(start, end) {
             drawingCtx.stroke();
             break;
         case 'circle':
-            const radius = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
             drawingCtx.beginPath();
             drawingCtx.arc(start.x, start.y, radius, 0, Math.PI * 2);
+            if (shapeFillEnabled) drawingCtx.fill();
             drawingCtx.stroke();
             break;
         case 'rectangle':
@@ -3028,10 +4317,25 @@ function drawShapePreview(start, end) {
             const height = end.y - start.y;
             drawingCtx.beginPath();
             drawingCtx.rect(start.x, start.y, width, height);
+            if (shapeFillEnabled) drawingCtx.fill();
             drawingCtx.stroke();
             break;
+        case 'triangle':
+            drawTriangle(drawingCtx, start.x, start.y, end.x, end.y, shapeFillEnabled);
+            break;
+        case 'star':
+            const outerRadius = radius;
+            const innerRadius = radius * 0.4;
+            drawStar(drawingCtx, centerX, centerY, outerRadius, innerRadius, 5, shapeFillEnabled);
+            break;
+        case 'polygon':
+            drawPolygon(drawingCtx, centerX, centerY, radius / 2, polygonSides, shapeFillEnabled);
+            break;
+        case 'diamond':
+            drawDiamond(drawingCtx, start.x, start.y, end.x, end.y, shapeFillEnabled);
+            break;
     }
-    
+
     drawingCtx.restore();
 }
 
@@ -3066,11 +4370,33 @@ function redrawAnnotations() {
                     const bounds = getPathBounds(annotation.path);
                     drawingCtx.strokeRect(bounds.minX - 5, bounds.minY - 5, bounds.width + 10, bounds.height + 10);
                 }
-            } else if (['line', 'arrow', 'circle', 'rectangle'].includes(annotation.type)) {
+            } else if (['line', 'arrow', 'circle', 'rectangle', 'triangle', 'star', 'polygon', 'diamond'].includes(annotation.type)) {
                 const bounds = getShapeBounds(annotation);
                 drawingCtx.strokeRect(bounds.minX - 5, bounds.minY - 5, bounds.width + 10, bounds.height + 10);
+
+                // Draw endpoint handles for lines and arrows
+                if (annotation.type === 'line' || annotation.type === 'arrow') {
+                    const handleRadius = 6;
+
+                    // Start point handle
+                    drawingCtx.setLineDash([]);
+                    drawingCtx.fillStyle = '#ffffff';
+                    drawingCtx.strokeStyle = '#3498db';
+                    drawingCtx.lineWidth = 2;
+
+                    drawingCtx.beginPath();
+                    drawingCtx.arc(annotation.start.x, annotation.start.y, handleRadius, 0, Math.PI * 2);
+                    drawingCtx.fill();
+                    drawingCtx.stroke();
+
+                    // End point handle
+                    drawingCtx.beginPath();
+                    drawingCtx.arc(annotation.end.x, annotation.end.y, handleRadius, 0, Math.PI * 2);
+                    drawingCtx.fill();
+                    drawingCtx.stroke();
+                }
             }
-            
+
             drawingCtx.restore();
         } else {
             drawingCtx.lineWidth = annotation.width || 2;
@@ -3078,6 +4404,7 @@ function redrawAnnotations() {
         
         drawingCtx.strokeStyle = annotation.color;
         drawingCtx.fillStyle = annotation.color;
+        drawingCtx.globalAlpha = annotation.opacity !== undefined ? annotation.opacity : 1;
         drawingCtx.lineCap = 'round';
         drawingCtx.lineJoin = 'round';
         drawingCtx.setLineDash([]); // Reset line dash
@@ -3128,23 +4455,47 @@ function redrawAnnotations() {
                 break;
                 
             case 'circle':
-                const radius = Math.sqrt(
-                    Math.pow(annotation.end.x - annotation.start.x, 2) + 
+                const circleRadius = Math.sqrt(
+                    Math.pow(annotation.end.x - annotation.start.x, 2) +
                     Math.pow(annotation.end.y - annotation.start.y, 2)
                 );
                 drawingCtx.beginPath();
-                drawingCtx.arc(annotation.start.x, annotation.start.y, radius, 0, Math.PI * 2);
+                drawingCtx.arc(annotation.start.x, annotation.start.y, circleRadius, 0, Math.PI * 2);
+                if (annotation.fill) drawingCtx.fill();
                 drawingCtx.stroke();
                 break;
-                
+
             case 'rectangle':
-                const width = annotation.end.x - annotation.start.x;
-                const height = annotation.end.y - annotation.start.y;
+                const rectWidth = annotation.end.x - annotation.start.x;
+                const rectHeight = annotation.end.y - annotation.start.y;
                 drawingCtx.beginPath();
-                drawingCtx.rect(annotation.start.x, annotation.start.y, width, height);
+                drawingCtx.rect(annotation.start.x, annotation.start.y, rectWidth, rectHeight);
+                if (annotation.fill) drawingCtx.fill();
                 drawingCtx.stroke();
                 break;
-                
+
+            case 'triangle':
+                drawTriangle(drawingCtx, annotation.start.x, annotation.start.y, annotation.end.x, annotation.end.y, annotation.fill);
+                break;
+
+            case 'star':
+                const starCenterX = (annotation.start.x + annotation.end.x) / 2;
+                const starCenterY = (annotation.start.y + annotation.end.y) / 2;
+                const starRadius = Math.sqrt(Math.pow(annotation.end.x - annotation.start.x, 2) + Math.pow(annotation.end.y - annotation.start.y, 2));
+                drawStar(drawingCtx, starCenterX, starCenterY, starRadius, starRadius * 0.4, 5, annotation.fill);
+                break;
+
+            case 'polygon':
+                const polyCenterX = (annotation.start.x + annotation.end.x) / 2;
+                const polyCenterY = (annotation.start.y + annotation.end.y) / 2;
+                const polyRadius = Math.sqrt(Math.pow(annotation.end.x - annotation.start.x, 2) + Math.pow(annotation.end.y - annotation.start.y, 2)) / 2;
+                drawPolygon(drawingCtx, polyCenterX, polyCenterY, polyRadius, annotation.sides || 6, annotation.fill);
+                break;
+
+            case 'diamond':
+                drawDiamond(drawingCtx, annotation.start.x, annotation.start.y, annotation.end.x, annotation.end.y, annotation.fill);
+                break;
+
             case 'text':
                 const size = annotation.size || 16;
                 let fontStyle = '';
@@ -4890,6 +6241,385 @@ function drawBrickRow(brickRow, isSelected) {
     }
 }
 
+// Get formatted material label from stone path
+function getMaterialLabel(stonePath) {
+    if (!stonePath) return null;
+
+    // Parse the path to extract manufacturer and name
+    // Example paths:
+    // "Images/Thin Brick/Interstate/Arctic White.jpg" -> "Interstate - Arctic White (thin)"
+    // "Images/Full Brick/Hebron/Classic Red.jpg" -> "Hebron - Classic Red (full)"
+    // "Images/Eldorado Stone/Cliffstone/Whitebark.jpg" -> "Eldorado - Cliffstone Whitebark"
+
+    const parts = stonePath.split('/');
+    if (parts.length < 3) return null;
+
+    let materialType = '';
+    let manufacturer = '';
+    let productName = '';
+
+    // Determine material type and parse accordingly
+    if (stonePath.includes('Thin Brick')) {
+        materialType = 'thin';
+        manufacturer = parts[parts.length - 2]; // e.g., "Interstate"
+        productName = parts[parts.length - 1].replace(/\.[^/.]+$/, ''); // Remove extension
+    } else if (stonePath.includes('Full Brick')) {
+        materialType = 'full';
+        manufacturer = parts[parts.length - 2];
+        productName = parts[parts.length - 1].replace(/\.[^/.]+$/, '');
+    } else {
+        // Stone - format: "Images/Manufacturer/Profile/Color.jpg"
+        materialType = 'stone';
+        // Find manufacturer from path
+        if (stonePath.includes('Eldorado')) {
+            manufacturer = 'Eldorado';
+        } else if (stonePath.includes('Casa Di Sassi')) {
+            manufacturer = 'Casa Di Sassi';
+        } else if (stonePath.includes('Dutch Quality') && !stonePath.includes('Thin Brick')) {
+            manufacturer = 'Dutch Quality';
+        } else if (stonePath.includes('Rocky Mountain')) {
+            manufacturer = 'Rocky Mountain';
+        } else {
+            manufacturer = parts[parts.length - 3] || parts[parts.length - 2];
+        }
+
+        const profile = parts[parts.length - 2];
+        const color = parts[parts.length - 1].replace(/\.[^/.]+$/, '');
+        productName = `${profile} ${color}`;
+    }
+
+    // Clean up product name (remove "Profile-", "Thinbrick-", etc.)
+    productName = productName
+        .replace(/^Profile-/i, '')
+        .replace(/^Thinbrick-/i, '')
+        .replace(/^Thin-Brick-/i, '')
+        .replace(/-/g, ' ')
+        .replace(/_/g, ' ');
+
+    // Format the final label
+    if (materialType === 'thin') {
+        return `${manufacturer} - ${productName} (thin)`;
+    } else if (materialType === 'full') {
+        return `${manufacturer} - ${productName} (full)`;
+    } else {
+        return `${manufacturer} - ${productName}`;
+    }
+}
+
+// Draw material labels above each area
+function drawMaterialLabels() {
+    if (!ctx) return;
+
+    areas.forEach((area, index) => {
+        if (!area || !area.points || area.points.length < 3) return;
+        if (area.isCutout) return;
+        if (!area.stone) return;
+
+        const label = getMaterialLabel(area.stone);
+        if (!label) return;
+
+        // Calculate bounds of the area
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        let sumX = 0, sumY = 0;
+
+        area.points.forEach(point => {
+            if (point.x < minX) minX = point.x;
+            if (point.x > maxX) maxX = point.x;
+            if (point.y < minY) minY = point.y;
+            if (point.y > maxY) maxY = point.y;
+            sumX += point.x;
+            sumY += point.y;
+        });
+
+        const centerX = sumX / area.points.length;
+        const centerY = sumY / area.points.length;
+        const labelPadding = 20; // Padding from edges
+
+        // Calculate label position based on labelPosition setting
+        let labelX, labelY, textAlign;
+
+        switch (labelPosition) {
+            case 'top':
+                labelX = centerX;
+                labelY = minY + labelPadding;
+                textAlign = 'center';
+                break;
+            case 'bottom':
+                labelX = centerX;
+                labelY = maxY - labelPadding;
+                textAlign = 'center';
+                break;
+            case 'top-left':
+                labelX = minX + labelPadding;
+                labelY = minY + labelPadding;
+                textAlign = 'left';
+                break;
+            case 'top-right':
+                labelX = maxX - labelPadding;
+                labelY = minY + labelPadding;
+                textAlign = 'right';
+                break;
+            case 'bottom-left':
+                labelX = minX + labelPadding;
+                labelY = maxY - labelPadding;
+                textAlign = 'left';
+                break;
+            case 'bottom-right':
+                labelX = maxX - labelPadding;
+                labelY = maxY - labelPadding;
+                textAlign = 'right';
+                break;
+            case 'center':
+            default:
+                labelX = centerX;
+                labelY = centerY;
+                textAlign = 'center';
+                break;
+        }
+
+        // Draw label with background
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        ctx.font = 'bold 14px Arial';
+        const textWidth = ctx.measureText(label).width;
+        const padding = 8;
+        const bgHeight = 24;
+        const bgWidth = textWidth + padding * 2;
+
+        // Calculate background position based on text alignment
+        let bgX;
+        if (textAlign === 'center') {
+            bgX = labelX - bgWidth / 2;
+        } else if (textAlign === 'left') {
+            bgX = labelX - padding;
+        } else { // right
+            bgX = labelX - bgWidth + padding;
+        }
+        const bgY = labelY - bgHeight / 2;
+
+        // Draw white background with rounded corners
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.beginPath();
+        const radius = 4;
+        ctx.moveTo(bgX + radius, bgY);
+        ctx.lineTo(bgX + bgWidth - radius, bgY);
+        ctx.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + radius);
+        ctx.lineTo(bgX + bgWidth, bgY + bgHeight - radius);
+        ctx.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - radius, bgY + bgHeight);
+        ctx.lineTo(bgX + radius, bgY + bgHeight);
+        ctx.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - radius);
+        ctx.lineTo(bgX, bgY + radius);
+        ctx.quadraticCurveTo(bgX, bgY, bgX + radius, bgY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw blue border
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw dark text
+        ctx.fillStyle = '#1a1a1a';
+        ctx.textAlign = textAlign;
+        ctx.textBaseline = 'middle';
+
+        // Adjust text X position for alignment
+        let textX;
+        if (textAlign === 'center') {
+            textX = labelX;
+        } else if (textAlign === 'left') {
+            textX = bgX + padding;
+        } else { // right
+            textX = bgX + bgWidth - padding;
+        }
+        ctx.fillText(label, textX, labelY);
+
+        ctx.restore();
+    });
+}
+
+// Draw Material Selector button overlays on top of textures
+function drawMaterialSelectorOverlays() {
+    if (!isMaterialSelectorMode || !ctx) return;
+    if (canvasMaterials.length === 0) return;
+
+    // Get panel dimensions (same calculation as in generateMaterialSelectorAreas)
+    const canvasWidth = 1600;
+    const canvasHeight = 960;
+    const titleHeight = 60;
+    const frameWidth = 15;
+    const gap = 30;
+    const woodFrameSize = 10;
+    const maxPanelWidth = 350;
+    const maxPanelHeight = 400;
+
+    const materialCount = canvasMaterials.length;
+
+    // Calculate grid layout - MUST match updateMaterialSelectorDisplay() exactly
+    let rows, cols;
+    if (materialCount === 1) {
+        rows = 1; cols = 1;
+    } else if (materialCount === 2) {
+        rows = 1; cols = 2;
+    } else if (materialCount <= 3) {
+        rows = 1; cols = 3;
+    } else if (materialCount === 4) {
+        rows = 2; cols = 2;
+    } else if (materialCount <= 6) {
+        rows = 2; cols = 3;
+    } else if (materialCount <= 8) {
+        rows = 2; cols = 4;
+    } else if (materialCount <= 9) {
+        rows = 3; cols = 3;
+    } else {
+        rows = 3; cols = 4;
+    }
+
+    const availableWidth = canvasWidth - frameWidth * 2 - gap * (cols + 1);
+    const availableHeight = canvasHeight - frameWidth * 2 - titleHeight - gap * (rows + 1);
+    let panelWidth = Math.floor(availableWidth / cols) - woodFrameSize * 2;
+    let panelHeight = Math.floor(availableHeight / rows) - woodFrameSize * 2;
+    panelWidth = Math.min(panelWidth, maxPanelWidth);
+    panelHeight = Math.min(panelHeight, maxPanelHeight);
+
+    const totalGridWidth = cols * (panelWidth + woodFrameSize * 2) + (cols - 1) * gap;
+    const totalGridHeight = rows * (panelHeight + woodFrameSize * 2) + (rows - 1) * gap;
+    const startX = frameWidth + (canvasWidth - frameWidth * 2 - totalGridWidth) / 2;
+    const startY = frameWidth + titleHeight + gap + (canvasHeight - frameWidth * 2 - titleHeight - gap - totalGridHeight) / 2;
+
+    for (let i = 0; i < materialCount; i++) {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        const frameX = startX + col * (panelWidth + woodFrameSize * 2 + gap);
+        const frameY = startY + row * (panelHeight + woodFrameSize * 2 + gap);
+        const x = frameX + woodFrameSize;
+        const y = frameY + woodFrameSize;
+        const panelNum = i + 1;
+        const material = canvasMaterials[i];
+        const isFavorite = material.isFavorite || false;
+
+        // Check hover state for this panel
+        const isPanelHovered = materialSelectorHoverState.panelIndex === i;
+        const isRemoveHovered = isPanelHovered && materialSelectorHoverState.buttonType === 'remove';
+        const isFavoriteHovered = isPanelHovered && materialSelectorHoverState.buttonType === 'favorite';
+        const isInfoHovered = isPanelHovered && materialSelectorHoverState.buttonType === 'info';
+
+        ctx.save();
+
+        // Panel hover effect - subtle glow around the entire panel
+        if (isPanelHovered && !materialSelectorHoverState.buttonType) {
+            ctx.strokeStyle = 'rgba(52, 152, 219, 0.8)';
+            ctx.lineWidth = 4;
+            ctx.shadowColor = 'rgba(52, 152, 219, 0.6)';
+            ctx.shadowBlur = 15;
+            ctx.strokeRect(x - 2, y - 2, panelWidth + 4, panelHeight + 4);
+            ctx.shadowBlur = 0;
+        }
+
+        // Number badge (top-left corner)
+        ctx.beginPath();
+        ctx.arc(x + 22, y + 22, 18, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(93, 78, 55, 0.85)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 14px Georgia';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(panelNum.toString(), x + 22, y + 22);
+
+        // Favorite star button (top-left, next to number) - with hover effect
+        const starRadius = isFavoriteHovered ? 19 : 16;
+        ctx.beginPath();
+        ctx.arc(x + 60, y + 22, starRadius, 0, Math.PI * 2);
+        if (isFavoriteHovered) {
+            ctx.shadowColor = isFavorite ? 'rgba(241, 196, 15, 0.8)' : 'rgba(255, 255, 255, 0.6)';
+            ctx.shadowBlur = 12;
+        }
+        ctx.fillStyle = isFavorite ? 'rgba(93, 78, 55, 0.95)' : 'rgba(0, 0, 0, 0.6)';
+        ctx.fill();
+        ctx.strokeStyle = isFavoriteHovered ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = isFavoriteHovered ? 2 : 1;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = isFavorite ? '#f1c40f' : (isFavoriteHovered ? '#ffffff' : 'rgba(255,255,255,0.7)');
+        ctx.font = isFavoriteHovered ? '22px Georgia' : '18px Georgia';
+        ctx.fillText('★', x + 60, y + 23);
+
+        // X button (top-right corner) - with hover effect
+        const xRadius = isRemoveHovered ? 19 : 16;
+        ctx.beginPath();
+        ctx.arc(x + panelWidth - 22, y + 22, xRadius, 0, Math.PI * 2);
+        if (isRemoveHovered) {
+            ctx.shadowColor = 'rgba(231, 76, 60, 0.8)';
+            ctx.shadowBlur = 12;
+        }
+        ctx.fillStyle = isRemoveHovered ? 'rgba(231, 76, 60, 0.95)' : 'rgba(192, 57, 43, 0.85)';
+        ctx.fill();
+        ctx.strokeStyle = isRemoveHovered ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = isRemoveHovered ? 2 : 1;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = isRemoveHovered ? 'bold 16px Arial' : 'bold 14px Arial';
+        ctx.fillText('✕', x + panelWidth - 22, y + 23);
+
+        // Large star indicator (bottom-right) - if favorited
+        if (isFavorite) {
+            ctx.fillStyle = '#f1c40f';
+            ctx.font = '32px Georgia';
+            ctx.shadowColor = 'rgba(0,0,0,0.7)';
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            ctx.fillText('★', x + panelWidth - 25, y + panelHeight - 15);
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+        }
+
+        // More Info button (bottom center) - with hover effect
+        const btnW = isInfoHovered ? 100 : 90;
+        const btnH = isInfoHovered ? 28 : 24;
+        const btnX = x + panelWidth / 2 - btnW / 2;
+        const btnY = y + panelHeight - (isInfoHovered ? 34 : 32);
+        const btnR = btnH / 2;
+
+        // Rounded rectangle for button
+        ctx.beginPath();
+        ctx.moveTo(btnX + btnR, btnY);
+        ctx.lineTo(btnX + btnW - btnR, btnY);
+        ctx.quadraticCurveTo(btnX + btnW, btnY, btnX + btnW, btnY + btnR);
+        ctx.lineTo(btnX + btnW, btnY + btnH - btnR);
+        ctx.quadraticCurveTo(btnX + btnW, btnY + btnH, btnX + btnW - btnR, btnY + btnH);
+        ctx.lineTo(btnX + btnR, btnY + btnH);
+        ctx.quadraticCurveTo(btnX, btnY + btnH, btnX, btnY + btnH - btnR);
+        ctx.lineTo(btnX, btnY + btnR);
+        ctx.quadraticCurveTo(btnX, btnY, btnX + btnR, btnY);
+        ctx.closePath();
+
+        if (isInfoHovered) {
+            ctx.shadowColor = 'rgba(52, 152, 219, 0.8)';
+            ctx.shadowBlur = 12;
+        }
+        ctx.fillStyle = isInfoHovered ? 'rgba(41, 128, 185, 1)' : 'rgba(52, 152, 219, 0.9)';
+        ctx.fill();
+        ctx.strokeStyle = isInfoHovered ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = isInfoHovered ? 2 : 1;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = isInfoHovered ? 'bold 13px Georgia' : 'bold 11px Georgia';
+        ctx.fillText('More Info', x + panelWidth / 2, btnY + btnH / 2 + 1);
+
+        ctx.restore();
+    }
+}
+
 function drawAreaOutline(points, isSelected, isCutout, isMultiSelected) {
     if (!points || points.length < 2) return;
 
@@ -5481,13 +7211,15 @@ function adjustCanvasForImage(img) {
 }
 
 // Thumbnail creation functions
-function createMaterialThumbnail(imgSrc, name, type) {
+function createMaterialThumbnail(imgSrc, name, type, manufacturer = '') {
     const thumbnail = document.createElement('div');
     thumbnail.className = 'material-item';
     thumbnail.dataset.img = imgSrc;
     thumbnail.dataset.name = name;
     thumbnail.dataset.type = type;
-    
+    thumbnail.dataset.manufacturer = manufacturer; // Store manufacturer on element
+    thumbnail.style.position = 'relative'; // For star button positioning
+
     const img = document.createElement('img');
     // LAZY LOADING: Use data-src instead of src
     img.setAttribute('data-src', imgSrc);
@@ -5495,14 +7227,54 @@ function createMaterialThumbnail(imgSrc, name, type) {
     img.alt = name;
     // Placeholder while lazy loading
     img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect fill="%23e0e0e0" width="100" height="100"/%3E%3C/svg%3E';
-    
+
     const span = document.createElement('span');
     span.textContent = name;
-    
+
+    // Star button for material selector (skip for decor type)
+    if (type !== 'decor') {
+        const starBtn = document.createElement('button');
+        starBtn.type = 'button';
+        starBtn.className = 'material-star-btn';
+        starBtn.innerHTML = '★';
+        starBtn.title = 'Add to comparison';
+        starBtn.setAttribute('data-url', imgSrc);
+        starBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Star clicked for:', name, imgSrc);
+            // Get manufacturer from parent container or card attribute
+            let manufacturer = '';
+            const manufacturerEl = thumbnail.closest('.manufacturer-group');
+            if (manufacturerEl && manufacturerEl.dataset.manufacturer) {
+                manufacturer = manufacturerEl.dataset.manufacturer;
+            } else if (thumbnail.dataset && thumbnail.dataset.manufacturer) {
+                manufacturer = thumbnail.dataset.manufacturer;
+            }
+            console.log('Found manufacturer:', manufacturer);
+            // Toggle material on/off canvas
+            const existingIndex = canvasMaterials.findIndex(m => m.url === imgSrc);
+            if (existingIndex >= 0) {
+                removeMaterialFromCanvas(existingIndex);
+            } else {
+                addMaterialToCanvas(imgSrc, name, manufacturer);
+            }
+        });
+        // Check if already on canvas
+        if (typeof canvasMaterials !== 'undefined' && canvasMaterials.some(m => m.url === imgSrc)) {
+            starBtn.classList.add('starred');
+        }
+        thumbnail.appendChild(starBtn);
+    }
+
     thumbnail.appendChild(img);
     thumbnail.appendChild(span);
-    
-    thumbnail.addEventListener('click', function() {
+
+    thumbnail.addEventListener('click', function(e) {
+        // Don't trigger if clicking on star button
+        if (e.target.classList.contains('material-star-btn')) {
+            return;
+        }
     // Load full-resolution image for canvas if not already loaded
     if (type === 'decor') {
         if (!decorationImages[imgSrc]) {
@@ -5545,8 +7317,24 @@ function createMaterialThumbnail(imgSrc, name, type) {
             };
             fullImg.src = imgSrc;
         }
-        
+
         console.log('Stone clicked:', name);
+
+        // MATERIAL SELECTOR MODE: Add material to canvas comparison
+        if (isMaterialSelectorMode) {
+            // Get manufacturer from parent container or card attribute
+            let manufacturer = '';
+            const manufacturerEl = this.closest('.manufacturer-group');
+            if (manufacturerEl && manufacturerEl.dataset.manufacturer) {
+                manufacturer = manufacturerEl.dataset.manufacturer;
+            } else if (this.dataset && this.dataset.manufacturer) {
+                manufacturer = this.dataset.manufacturer;
+            }
+            console.log('Material selector - Found manufacturer:', manufacturer);
+            addMaterialToCanvas(imgSrc, name, manufacturer);
+            return; // Don't continue with normal stone selection
+        }
+
 console.log('Material panel before:', document.querySelector('.material-selection-panel'));
 
 document.querySelectorAll('.material-item').forEach(i => {
@@ -5846,7 +7634,7 @@ if (currentImage) {
     });
  // Draw accents - DEBUG
 // (Remove the old accents drawing code since we now draw them in layers)
-    
+
     // Draw area outlines if not hiding
     if (!hideOutlines) {
         areas.forEach((area, index) => {
@@ -6047,6 +7835,24 @@ if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint && l
             ctx.shadowBlur = 0;
             ctx.shadowColor = 'transparent';
         }
+    }
+
+    // Draw material labels LAST so they appear on top of everything
+    // This is OUTSIDE the hideOutlines block so it always runs when enabled
+    console.log('=== END OF drawCanvas, checking labels ===');
+    console.log('showMaterialLabels value:', showMaterialLabels);
+    console.log('areas.length:', areas.length);
+
+    if (showMaterialLabels) {
+        console.log('>>> LABELS ENABLED - calling drawMaterialLabels');
+        drawMaterialLabels();
+    } else {
+        console.log('>>> Labels are OFF');
+    }
+
+    // Draw Material Selector button overlays on top of everything
+    if (isMaterialSelectorMode) {
+        drawMaterialSelectorOverlays();
     }
 }
 
@@ -7120,6 +8926,1061 @@ function finishDrawingDepthArea() {
     drawCanvas();
 }
 
+// ========== MATERIAL SELECTOR FUNCTIONS ==========
+
+// Helper function to format manufacturer slugs into display names
+function formatManufacturerName(slug) {
+    if (!slug) return '';
+    // Map common slug formats to nice display names
+    const manufacturerMap = {
+        'dutch-quality': 'Dutch Quality',
+        'eldorado-stone': 'Eldorado Stone',
+        'casa-di-sassi': 'Casa di Sassi',
+        'rocky-mountain-stoneworks': 'Rocky Mountain Stoneworks',
+        'endicott': 'Endicott',
+        'glen-gery': 'Glen-Gery',
+        'hebron-brick': 'Hebron Brick',
+        'king-klinker': 'King Klinker',
+        'hc-muddox': 'H.C. Muddox',
+        'interstate-brick': 'Interstate Brick',
+        'metrobrick': 'Metrobrick',
+        'rms-thin-brick': 'RMS Thin Brick'
+    };
+    return manufacturerMap[slug] || slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+// Helper function to lookup manufacturer from material URL
+function lookupManufacturerByUrl(url) {
+    // Check all material arrays for a match
+    const allArrays = [
+        typeof DUTCH_QUALITY_MATERIALS !== 'undefined' ? DUTCH_QUALITY_MATERIALS : [],
+        typeof DUTCH_QUALITY_THIN_BRICK_MATERIALS !== 'undefined' ? DUTCH_QUALITY_THIN_BRICK_MATERIALS : [],
+        typeof ELDORADO_MATERIALS !== 'undefined' ? ELDORADO_MATERIALS : [],
+        typeof CASA_DI_SASSI_MATERIALS !== 'undefined' ? CASA_DI_SASSI_MATERIALS : [],
+        typeof ROCKY_MOUNTAIN_MATERIALS !== 'undefined' ? ROCKY_MOUNTAIN_MATERIALS : [],
+        typeof ENDICOTT_MATERIALS !== 'undefined' ? ENDICOTT_MATERIALS : [],
+        typeof GLEN_GERY_MATERIALS !== 'undefined' ? GLEN_GERY_MATERIALS : [],
+        typeof HEBRON_MATERIALS !== 'undefined' ? HEBRON_MATERIALS : [],
+        typeof KING_KLINKER_MATERIALS !== 'undefined' ? KING_KLINKER_MATERIALS : [],
+        typeof HC_MUDDOX_MATERIALS !== 'undefined' ? HC_MUDDOX_MATERIALS : [],
+        typeof INTERSTATE_MATERIALS !== 'undefined' ? INTERSTATE_MATERIALS : [],
+        typeof METROBRICK_MATERIALS !== 'undefined' ? METROBRICK_MATERIALS : [],
+        typeof STONE_MATERIALS !== 'undefined' ? STONE_MATERIALS : []
+    ];
+
+    for (const arr of allArrays) {
+        const found = arr.find(m => m.url === url);
+        if (found && found.manufacturer) {
+            return formatManufacturerName(found.manufacturer);
+        }
+    }
+    return '';
+}
+
+// Add a material to the canvas comparison view
+function addMaterialToCanvas(url, name, manufacturer) {
+    // If no manufacturer provided, try to look it up
+    if (!manufacturer) {
+        manufacturer = lookupManufacturerByUrl(url);
+        console.log('Looked up manufacturer:', manufacturer);
+    } else {
+        // Format the manufacturer name if it's a slug
+        manufacturer = formatManufacturerName(manufacturer);
+    }
+
+    // Check if already on canvas
+    const existingIndex = canvasMaterials.findIndex(m => m.url === url);
+    if (existingIndex >= 0) {
+        showMessage(`"${name}" is already on the canvas`);
+        return;
+    }
+
+    // Check limit
+    if (canvasMaterials.length >= MAX_CANVAS_MATERIALS) {
+        showMessage(`Maximum ${MAX_CANVAS_MATERIALS} materials allowed. Remove one first.`);
+        return;
+    }
+
+    canvasMaterials.push({
+        url,
+        name,
+        manufacturer,
+        isFavorite: false
+    });
+    showMessage(`Added "${name}" to canvas (${canvasMaterials.length}/${MAX_CANVAS_MATERIALS})`);
+
+    // Update display
+    updateCanvasMaterialCount();
+    saveCanvasMaterials();
+
+    if (isMaterialSelectorMode) {
+        updateMaterialSelectorDisplay();
+    }
+}
+
+// Remove a material from canvas
+function removeMaterialFromCanvas(index) {
+    if (index >= 0 && index < canvasMaterials.length) {
+        const material = canvasMaterials[index];
+        // Also remove from favorites if it was favorited
+        if (material.isFavorite) {
+            const favIndex = favoriteMaterials.findIndex(m => m.url === material.url);
+            if (favIndex >= 0) {
+                favoriteMaterials.splice(favIndex, 1);
+                saveFavoriteMaterials();
+                renderMySelectionsList();
+            }
+        }
+        canvasMaterials.splice(index, 1);
+        showMessage(`Removed material from canvas`);
+        updateCanvasMaterialCount();
+        saveCanvasMaterials();
+
+        if (isMaterialSelectorMode) {
+            updateMaterialSelectorDisplay();
+        }
+    }
+}
+
+// Toggle favorite status of a material on canvas
+function toggleMaterialFavorite(index) {
+    if (index >= 0 && index < canvasMaterials.length) {
+        const material = canvasMaterials[index];
+        material.isFavorite = !material.isFavorite;
+
+        if (material.isFavorite) {
+            // Add to favorites
+            favoriteMaterials.push({
+                url: material.url,
+                name: material.name,
+                manufacturer: material.manufacturer,
+                notes: '',
+                addedDate: Date.now()
+            });
+            showMessage(`Added "${material.name}" to favorites`);
+        } else {
+            // Remove from favorites
+            const favIndex = favoriteMaterials.findIndex(m => m.url === material.url);
+            if (favIndex >= 0) {
+                favoriteMaterials.splice(favIndex, 1);
+            }
+            showMessage(`Removed "${material.name}" from favorites`);
+        }
+
+        saveCanvasMaterials();
+        saveFavoriteMaterials();
+        renderMySelectionsList();
+
+        if (isMaterialSelectorMode) {
+            updateMaterialSelectorDisplay();
+        }
+    }
+}
+
+// Update the canvas material count display
+function updateCanvasMaterialCount() {
+    const countEl = document.getElementById('starred-count');
+    if (countEl) {
+        countEl.textContent = canvasMaterials.length;
+    }
+}
+
+// Clear all materials from canvas
+function clearAllCanvasMaterials() {
+    // Also clear favorites for materials being removed
+    canvasMaterials.forEach(m => {
+        if (m.isFavorite) {
+            const favIndex = favoriteMaterials.findIndex(f => f.url === m.url);
+            if (favIndex >= 0) {
+                favoriteMaterials.splice(favIndex, 1);
+            }
+        }
+    });
+    canvasMaterials = [];
+    updateCanvasMaterialCount();
+    saveCanvasMaterials();
+    saveFavoriteMaterials();
+    renderMySelectionsList();
+    if (isMaterialSelectorMode) {
+        updateMaterialSelectorDisplay();
+    }
+    showMessage('Cleared all materials from canvas');
+}
+
+// Legacy function name for compatibility
+function clearAllStarredMaterials() {
+    clearAllCanvasMaterials();
+}
+
+// Update all star button states based on canvasMaterials array (for thumbnail indicators)
+function updateStarButtonStates() {
+    document.querySelectorAll('.material-star-btn').forEach(btn => {
+        const url = btn.getAttribute('data-url');
+        if (canvasMaterials.some(m => m.url === url)) {
+            btn.classList.add('starred');
+        } else {
+            btn.classList.remove('starred');
+        }
+    });
+}
+
+// Legacy function name for compatibility
+function updateStarredCount() {
+    updateCanvasMaterialCount();
+}
+
+// Update the material selector display based on canvas materials
+function updateMaterialSelectorDisplay() {
+    if (!isMaterialSelectorMode) return;
+
+    // Reset hover state when display updates to prevent glitches
+    materialSelectorHoverState = { panelIndex: -1, buttonType: null, buttonIndex: -1 };
+
+    const count = canvasMaterials.length;
+
+    // If no materials on canvas, show blank canvas with instruction
+    if (count === 0) {
+        // Clear button arrays when no materials
+        materialSelectorRemoveButtons = [];
+        materialSelectorFavoriteButtons = [];
+        materialSelectorInfoButtons = [];
+
+        const svgContent = generateBlankSelectorSVG();
+        const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+
+        const newImage = new Image();
+        newImage.onload = function() {
+            currentImage = newImage;
+            URL.revokeObjectURL(svgUrl);
+            areas = [];
+            selectedAreaIndex = -1;
+            updateAreasList();
+            drawCanvas();
+        };
+        newImage.onerror = function() {
+            console.error('Failed to load blank selector SVG');
+            URL.revokeObjectURL(svgUrl);
+        };
+        newImage.src = svgUrl;
+        return;
+    }
+
+    // Calculate optimal grid based on number of canvas materials
+    let rows, cols;
+
+    if (count === 1) {
+        rows = 1;
+        cols = 1;
+    } else if (count === 2) {
+        rows = 1;
+        cols = 2;
+    } else if (count <= 3) {
+        rows = 1;
+        cols = 3;
+    } else if (count === 4) {
+        rows = 2;
+        cols = 2;
+    } else if (count <= 6) {
+        rows = 2;
+        cols = 3;
+    } else if (count <= 8) {
+        rows = 2;
+        cols = 4;
+    } else if (count <= 9) {
+        rows = 3;
+        cols = 3;
+    } else {
+        rows = 3;
+        cols = 4;
+    }
+
+    // Generate the background SVG
+    const svgContent = generateMaterialSelectorSVG(rows, cols, canvasMaterials);
+    const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    // Load the SVG as background
+    const newImage = new Image();
+    newImage.onload = function() {
+        currentImage = newImage;
+        URL.revokeObjectURL(svgUrl);
+
+        // Create areas for each canvas material (only for actual materials, not empty slots)
+        generateMaterialSelectorAreas(rows, cols);
+
+        drawCanvas();
+    };
+    newImage.onerror = function() {
+        console.error('Failed to load material selector SVG');
+        URL.revokeObjectURL(svgUrl);
+    };
+    newImage.src = svgUrl;
+}
+
+// Generate blank canvas SVG when no materials are on canvas
+function generateBlankSelectorSVG() {
+    const canvasWidth = 1600;
+    const canvasHeight = 960;
+    const titleHeight = 60;
+    const frameWidth = 15;
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}">
+  <!-- Definitions for wood grain pattern -->
+  <defs>
+    <pattern id="woodGrain" patternUnits="userSpaceOnUse" width="200" height="200">
+      <rect width="200" height="200" fill="#8B4513"/>
+      <path d="M0 20 Q50 15 100 20 T200 20" stroke="#6B3510" stroke-width="2" fill="none" opacity="0.3"/>
+      <path d="M0 60 Q50 55 100 60 T200 60" stroke="#5D2E0C" stroke-width="1.5" fill="none" opacity="0.25"/>
+      <path d="M0 100 Q50 95 100 100 T200 100" stroke="#6B3510" stroke-width="2" fill="none" opacity="0.3"/>
+      <path d="M0 140 Q50 135 100 140 T200 140" stroke="#5D2E0C" stroke-width="1.5" fill="none" opacity="0.25"/>
+      <path d="M0 180 Q50 175 100 180 T200 180" stroke="#6B3510" stroke-width="2" fill="none" opacity="0.3"/>
+    </pattern>
+  </defs>
+
+  <!-- Background - cream/off-white -->
+  <rect width="${canvasWidth}" height="${canvasHeight}" fill="#f5f5f0"/>
+
+  <!-- Wood frame border -->
+  <rect x="0" y="0" width="${canvasWidth}" height="${frameWidth}" fill="url(#woodGrain)"/>
+  <rect x="0" y="${canvasHeight - frameWidth}" width="${canvasWidth}" height="${frameWidth}" fill="url(#woodGrain)"/>
+  <rect x="0" y="0" width="${frameWidth}" height="${canvasHeight}" fill="url(#woodGrain)"/>
+  <rect x="${canvasWidth - frameWidth}" y="0" width="${frameWidth}" height="${canvasHeight}" fill="url(#woodGrain)"/>
+
+  <!-- Inner shadow for depth -->
+  <rect x="${frameWidth}" y="${frameWidth}" width="${canvasWidth - frameWidth * 2}" height="${canvasHeight - frameWidth * 2}" fill="none" stroke="#d4d4c8" stroke-width="3"/>
+
+  <!-- Title Bar -->
+  <rect x="${frameWidth}" y="${frameWidth}" width="${canvasWidth - frameWidth * 2}" height="${titleHeight}" fill="#5D4E37"/>
+  <text x="${canvasWidth/2}" y="${frameWidth + 38}" text-anchor="middle" fill="#ffffff" font-family="Georgia, serif" font-size="26" font-weight="bold">MATERIAL SELECTION</text>
+
+  <!-- Center instruction -->
+  <text x="${canvasWidth/2}" y="${canvasHeight/2 - 30}" text-anchor="middle" fill="#666666" font-family="Georgia, serif" font-size="32">Click on any material below</text>
+  <text x="${canvasWidth/2}" y="${canvasHeight/2 + 20}" text-anchor="middle" fill="#888888" font-family="Georgia, serif" font-size="20">to add it to this selection view</text>
+  <text x="${canvasWidth/2}" y="${canvasHeight/2 + 60}" text-anchor="middle" fill="#999999" font-family="Georgia, serif" font-size="14">Select up to 12 materials to compare</text>
+</svg>`;
+}
+
+// Generate SVG for material selector with material previews
+function generateMaterialSelectorSVG(rows, cols, materials) {
+    const canvasWidth = 1600;
+    const canvasHeight = 960;
+    const titleHeight = 60;
+    const frameWidth = 15;
+    const gap = 30; // Increased gap for wood frames
+    const woodFrameSize = 10; // Wood frame around each panel
+
+    // Calculate max panel size (about 25% of canvas area for single panel)
+    const maxPanelWidth = 350;
+    const maxPanelHeight = 400;
+
+    // Calculate panel dimensions based on grid, but cap at max size
+    // Account for wood frames around each panel
+    const availableWidth = canvasWidth - frameWidth * 2 - gap * (cols + 1);
+    const availableHeight = canvasHeight - frameWidth * 2 - titleHeight - gap * (rows + 1);
+    let panelWidth = Math.floor(availableWidth / cols) - woodFrameSize * 2;
+    let panelHeight = Math.floor(availableHeight / rows) - woodFrameSize * 2;
+
+    // Cap panel size to maximum
+    panelWidth = Math.min(panelWidth, maxPanelWidth);
+    panelHeight = Math.min(panelHeight, maxPanelHeight);
+
+    // Calculate total grid dimensions for centering (include wood frames)
+    const totalGridWidth = cols * (panelWidth + woodFrameSize * 2) + (cols - 1) * gap;
+    const totalGridHeight = rows * (panelHeight + woodFrameSize * 2) + (rows - 1) * gap;
+
+    // Calculate starting position to center the grid
+    const startX = frameWidth + (canvasWidth - frameWidth * 2 - totalGridWidth) / 2;
+    const startY = frameWidth + titleHeight + gap + (canvasHeight - frameWidth * 2 - titleHeight - gap - totalGridHeight) / 2;
+
+    let boxesSVG = '';
+
+    // Only create panels for actual materials, not empty slots
+    const materialCount = materials.length;
+
+    for (let i = 0; i < materialCount; i++) {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        // Position includes wood frame offset
+        const frameX = startX + col * (panelWidth + woodFrameSize * 2 + gap);
+        const frameY = startY + row * (panelHeight + woodFrameSize * 2 + gap);
+        const x = frameX + woodFrameSize;
+        const y = frameY + woodFrameSize;
+        const panelNum = i + 1;
+        const material = materials[i];
+        const isFavorite = material.isFavorite || false;
+
+        // Wood frame around each panel (outer frame)
+        boxesSVG += `
+  <rect x="${frameX}" y="${frameY}" width="${panelWidth + woodFrameSize * 2}" height="${panelHeight + woodFrameSize * 2}" fill="url(#woodGrain)" rx="4"/>`;
+
+        // Panel background - white/cream (will be covered by texture)
+        boxesSVG += `
+  <rect x="${x}" y="${y}" width="${panelWidth}" height="${panelHeight}" fill="#fafafa" stroke="#c9a86c" stroke-width="1" rx="2"/>`;
+
+        // ALL BUTTONS ARE NOW OVERLAYS - drawn on top of the texture area
+        // These will appear on top of the brick/stone texture
+
+        // Number badge (top-left corner) - semi-transparent overlay
+        boxesSVG += `
+  <circle cx="${x + 22}" cy="${y + 22}" r="18" fill="rgba(93, 78, 55, 0.85)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+  <text x="${x + 22}" y="${y + 27}" text-anchor="middle" fill="#ffffff" font-family="Georgia, serif" font-size="14" font-weight="bold">${panelNum}</text>`;
+
+        // Favorite star button (top-left, next to number) - semi-transparent overlay
+        const starColor = isFavorite ? '#f1c40f' : 'rgba(255,255,255,0.7)';
+        const starBg = isFavorite ? 'rgba(93, 78, 55, 0.9)' : 'rgba(0, 0, 0, 0.5)';
+        boxesSVG += `
+  <circle cx="${x + 60}" cy="${y + 22}" r="16" fill="${starBg}" stroke="rgba(255,255,255,0.3)" stroke-width="1" class="favorite-btn" data-index="${i}"/>
+  <text x="${x + 60}" y="${y + 28}" text-anchor="middle" fill="${starColor}" font-family="Georgia, serif" font-size="18">★</text>`;
+
+        // X button (top-right corner) - semi-transparent overlay
+        boxesSVG += `
+  <circle cx="${x + panelWidth - 22}" cy="${y + 22}" r="16" fill="rgba(192, 57, 43, 0.85)" stroke="rgba(255,255,255,0.3)" stroke-width="1" class="remove-btn" data-index="${i}"/>
+  <text x="${x + panelWidth - 22}" y="${y + 27}" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="bold">✕</text>`;
+
+        // Large star indicator (bottom-right of panel) - if favorited
+        if (isFavorite) {
+            boxesSVG += `
+  <text x="${x + panelWidth - 25}" y="${y + panelHeight - 20}" text-anchor="middle" fill="#f1c40f" font-family="Georgia, serif" font-size="32" style="filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.7));">★</text>`;
+        }
+
+        // More Info button (bottom center) - semi-transparent overlay on brick
+        boxesSVG += `
+  <rect x="${x + panelWidth/2 - 45}" y="${y + panelHeight - 32}" width="90" height="24" rx="12" fill="rgba(52, 152, 219, 0.9)" stroke="rgba(255,255,255,0.3)" stroke-width="1" class="info-btn" data-index="${i}"/>
+  <text x="${x + panelWidth/2}" y="${y + panelHeight - 16}" text-anchor="middle" fill="#ffffff" font-family="Georgia, serif" font-size="11" font-weight="bold">More Info</text>`;
+    }
+
+    const titleText = `MATERIAL SELECTION - ${materials.length} material${materials.length !== 1 ? 's' : ''} selected`;
+
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}">
+  <!-- Definitions for wood grain pattern -->
+  <defs>
+    <pattern id="woodGrain" patternUnits="userSpaceOnUse" width="200" height="200">
+      <rect width="200" height="200" fill="#8B4513"/>
+      <path d="M0 20 Q50 15 100 20 T200 20" stroke="#6B3510" stroke-width="2" fill="none" opacity="0.3"/>
+      <path d="M0 60 Q50 55 100 60 T200 60" stroke="#5D2E0C" stroke-width="1.5" fill="none" opacity="0.25"/>
+      <path d="M0 100 Q50 95 100 100 T200 100" stroke="#6B3510" stroke-width="2" fill="none" opacity="0.3"/>
+      <path d="M0 140 Q50 135 100 140 T200 140" stroke="#5D2E0C" stroke-width="1.5" fill="none" opacity="0.25"/>
+      <path d="M0 180 Q50 175 100 180 T200 180" stroke="#6B3510" stroke-width="2" fill="none" opacity="0.3"/>
+    </pattern>
+  </defs>
+
+  <!-- Background - cream/off-white -->
+  <rect width="${canvasWidth}" height="${canvasHeight}" fill="#f5f5f0"/>
+
+  <!-- Wood frame border -->
+  <rect x="0" y="0" width="${canvasWidth}" height="${frameWidth}" fill="url(#woodGrain)"/>
+  <rect x="0" y="${canvasHeight - frameWidth}" width="${canvasWidth}" height="${frameWidth}" fill="url(#woodGrain)"/>
+  <rect x="0" y="0" width="${frameWidth}" height="${canvasHeight}" fill="url(#woodGrain)"/>
+  <rect x="${canvasWidth - frameWidth}" y="0" width="${frameWidth}" height="${canvasHeight}" fill="url(#woodGrain)"/>
+
+  <!-- Inner shadow for depth -->
+  <rect x="${frameWidth}" y="${frameWidth}" width="${canvasWidth - frameWidth * 2}" height="${canvasHeight - frameWidth * 2}" fill="none" stroke="#d4d4c8" stroke-width="3"/>
+
+  <!-- Title Bar -->
+  <rect x="${frameWidth}" y="${frameWidth}" width="${canvasWidth - frameWidth * 2}" height="${titleHeight}" fill="#5D4E37"/>
+  <text x="${canvasWidth/2}" y="${frameWidth + 38}" text-anchor="middle" fill="#ffffff" font-family="Georgia, serif" font-size="24" font-weight="bold">${titleText}</text>
+${boxesSVG}
+</svg>`;
+
+    return svgContent;
+}
+
+// Store button positions for click detection
+let materialSelectorRemoveButtons = [];
+let materialSelectorFavoriteButtons = [];
+let materialSelectorInfoButtons = [];
+
+// Hover state for Material Selector (only used in material-selector mode)
+let materialSelectorHoverState = {
+    panelIndex: -1,      // Which panel is being hovered (-1 = none)
+    buttonType: null,    // 'remove', 'favorite', 'info', or null
+    buttonIndex: -1      // Which button index
+};
+
+// Generate areas for material selector panels
+function generateMaterialSelectorAreas(rows, cols) {
+    const canvasWidth = 1600;
+    const canvasHeight = 960;
+    const titleHeight = 60;
+    const frameWidth = 15;
+    const gap = 30;
+    const woodFrameSize = 10;
+
+    // Calculate max panel size (same as SVG generation)
+    const maxPanelWidth = 350;
+    const maxPanelHeight = 400;
+
+    // Calculate panel dimensions based on grid, but cap at max size
+    const availableWidth = canvasWidth - frameWidth * 2 - gap * (cols + 1);
+    const availableHeight = canvasHeight - frameWidth * 2 - titleHeight - gap * (rows + 1);
+    let panelWidth = Math.floor(availableWidth / cols) - woodFrameSize * 2;
+    let panelHeight = Math.floor(availableHeight / rows) - woodFrameSize * 2;
+
+    // Cap panel size to maximum
+    panelWidth = Math.min(panelWidth, maxPanelWidth);
+    panelHeight = Math.min(panelHeight, maxPanelHeight);
+
+    // Calculate total grid dimensions for centering (include wood frames)
+    const totalGridWidth = cols * (panelWidth + woodFrameSize * 2) + (cols - 1) * gap;
+    const totalGridHeight = rows * (panelHeight + woodFrameSize * 2) + (rows - 1) * gap;
+
+    // Calculate starting position to center the grid
+    const startX = frameWidth + (canvasWidth - frameWidth * 2 - totalGridWidth) / 2;
+    const startY = frameWidth + titleHeight + gap + (canvasHeight - frameWidth * 2 - titleHeight - gap - totalGridHeight) / 2;
+
+    // Clear existing areas and buttons
+    areas = [];
+    selectedAreaIndex = -1;
+    materialSelectorRemoveButtons = [];
+    materialSelectorFavoriteButtons = [];
+    materialSelectorInfoButtons = [];
+
+    // Only create areas for actual canvas materials
+    const materialCount = canvasMaterials.length;
+
+    for (let i = 0; i < materialCount; i++) {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        const frameX = startX + col * (panelWidth + woodFrameSize * 2 + gap);
+        const frameY = startY + row * (panelHeight + woodFrameSize * 2 + gap);
+        const x = frameX + woodFrameSize;
+        const y = frameY + woodFrameSize;
+
+        const material = canvasMaterials[i];
+
+        // Full panel coverage - buttons are now overlays drawn on top of texture
+        const newArea = {
+            id: Date.now() + i,
+            points: [
+                { x: x, y: y },
+                { x: x + panelWidth, y: y },
+                { x: x + panelWidth, y: y + panelHeight },
+                { x: x, y: y + panelHeight }
+            ],
+            stone: material.url,
+            scale: 150,
+            rotation: 0,
+            brightness: 100,
+            textureMode: 'stone_linear',
+            panelNumber: i + 1,
+            materialIndex: i
+        };
+
+        areas.push(newArea);
+
+        // Store X button position for click detection (remove from canvas) - matches SVG
+        materialSelectorRemoveButtons.push({
+            x: x + panelWidth - 22,
+            y: y + 22,
+            radius: 16,
+            materialIndex: i
+        });
+
+        // Store star button position for click detection (toggle favorite) - matches SVG
+        materialSelectorFavoriteButtons.push({
+            x: x + 60,
+            y: y + 22,
+            radius: 16,
+            materialIndex: i
+        });
+
+        // Store More Info button position for click detection - matches SVG
+        materialSelectorInfoButtons.push({
+            x: x + panelWidth / 2,
+            y: y + panelHeight - 20, // Center of the button (y + panelHeight - 32 + 12)
+            width: 90,
+            height: 24,
+            materialIndex: i
+        });
+    }
+
+    updateAreasList();
+}
+
+// Initialize material selector mode
+function initMaterialSelectorMode() {
+    isMaterialSelectorMode = true;
+
+    // Show the panel controls
+    const panelControls = document.getElementById('panel-grid-controls');
+    if (panelControls) {
+        panelControls.style.display = 'block';
+    }
+
+    // Enable labels by default for Material Selector mode, positioned at "top"
+    showMaterialLabels = true;
+    labelPosition = 'top';
+    const toggleLabelsBtn = document.getElementById('toggle-labels-btn');
+    if (toggleLabelsBtn) {
+        toggleLabelsBtn.classList.add('active');
+    }
+    const labelPositionSelect = document.getElementById('label-position-select');
+    if (labelPositionSelect) {
+        labelPositionSelect.value = 'top';
+    }
+
+    // FRESH START: Clear canvas materials on page load/refresh
+    // Only favorites are persisted, canvas selections start fresh each session
+    canvasMaterials = [];
+
+    // Load favorite materials from localStorage (these ARE persisted)
+    try {
+        const savedFavorites = localStorage.getItem('favoriteMaterials');
+        if (savedFavorites) {
+            favoriteMaterials = JSON.parse(savedFavorites);
+            // Migrate old data and format manufacturer names
+            favoriteMaterials = favoriteMaterials.map(m => {
+                let manufacturer = m.manufacturer || '';
+                // If no manufacturer, try to look it up
+                if (!manufacturer) {
+                    manufacturer = lookupManufacturerByUrl(m.url);
+                } else {
+                    // Format manufacturer name if it's a slug
+                    manufacturer = formatManufacturerName(manufacturer);
+                }
+                return {
+                    url: m.url,
+                    name: m.name,
+                    manufacturer: manufacturer,
+                    notes: m.notes || '',
+                    addedDate: m.addedDate || Date.now()
+                };
+            });
+            // Save the migrated data
+            saveFavoriteMaterials();
+        }
+    } catch (e) {
+        console.warn('Could not load favorite materials:', e);
+        favoriteMaterials = [];
+    }
+
+    // Clear the localStorage for canvas materials (fresh start each session)
+    localStorage.removeItem('canvasMaterials');
+
+    updateStarButtonStates();
+    updateCanvasMaterialCount();
+    renderMySelectionsList();
+    updateMaterialSelectorDisplay();
+}
+
+// Save canvas materials to localStorage
+function saveCanvasMaterials() {
+    try {
+        localStorage.setItem('canvasMaterials', JSON.stringify(canvasMaterials));
+    } catch (e) {
+        console.warn('Could not save canvas materials:', e);
+    }
+}
+
+// Save favorite materials to localStorage
+function saveFavoriteMaterials() {
+    try {
+        localStorage.setItem('favoriteMaterials', JSON.stringify(favoriteMaterials));
+    } catch (e) {
+        console.warn('Could not save favorite materials:', e);
+    }
+}
+
+// Legacy function for backward compatibility
+function saveStarredMaterials() {
+    try {
+        localStorage.setItem('starredMaterials', JSON.stringify(canvasMaterials));
+    } catch (e) {
+        console.warn('Could not save starred materials:', e);
+    }
+}
+
+// Update notes for a starred material
+function updateMaterialNotes(materialIndex, notes) {
+    if (materialIndex >= 0 && materialIndex < starredMaterials.length) {
+        starredMaterials[materialIndex].notes = notes;
+        saveStarredMaterials();
+        // Update My Selections panel if visible
+        updateMySelectionsPanel();
+    }
+}
+
+// Download selections as PDF/image
+function downloadSelectionsPDF() {
+    console.log('downloadSelectionsPDF called, canvas materials:', canvasMaterials.length);
+    console.log('Canvas materials data:', canvasMaterials.map(m => ({ name: m.name, manufacturer: m.manufacturer, isFavorite: m.isFavorite })));
+    if (canvasMaterials.length === 0) {
+        showMessage('No materials on canvas. Click on materials to add them first.');
+        return;
+    }
+
+    // Create a new window/canvas for the PDF
+    const pdfCanvas = document.createElement('canvas');
+    const pdfCtx = pdfCanvas.getContext('2d');
+
+    // A4-ish proportions at good resolution
+    const pageWidth = 1200;
+    const pageHeight = 1600;
+    pdfCanvas.width = pageWidth;
+    pdfCanvas.height = pageHeight;
+
+    // Background
+    pdfCtx.fillStyle = '#ffffff';
+    pdfCtx.fillRect(0, 0, pageWidth, pageHeight);
+
+    // Header
+    pdfCtx.fillStyle = '#5D4E37';
+    pdfCtx.fillRect(0, 0, pageWidth, 100);
+    pdfCtx.fillStyle = '#ffffff';
+    pdfCtx.font = 'bold 36px Georgia';
+    pdfCtx.textAlign = 'center';
+    pdfCtx.fillText('Material Selection', pageWidth / 2, 60);
+
+    // Date
+    pdfCtx.fillStyle = '#d4c4a8';
+    pdfCtx.font = '16px Georgia';
+    pdfCtx.fillText(new Date().toLocaleDateString(), pageWidth / 2, 85);
+
+    // Materials grid
+    const cols = 3;
+    const padding = 40;
+    const gap = 20;
+    const cardWidth = (pageWidth - padding * 2 - gap * (cols - 1)) / cols;
+    const cardHeight = 300; // Increased to accommodate manufacturer + name
+    const imageSize = 150;
+
+    let loadedCount = 0;
+    const totalImages = canvasMaterials.length;
+
+    // Function to draw after all images load
+    function drawMaterialCard(material, index) {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const x = padding + col * (cardWidth + gap);
+        const y = 130 + row * (cardHeight + gap);
+
+        // Card background
+        pdfCtx.fillStyle = '#f5f5f5';
+        pdfCtx.fillRect(x, y, cardWidth, cardHeight);
+
+        // Card border - gold for favorites, blue for regular
+        pdfCtx.strokeStyle = material.isFavorite ? '#f1c40f' : '#5D4E37';
+        pdfCtx.lineWidth = material.isFavorite ? 3 : 2;
+        pdfCtx.strokeRect(x, y, cardWidth, cardHeight);
+
+        // Number badge
+        pdfCtx.fillStyle = '#5D4E37';
+        pdfCtx.beginPath();
+        pdfCtx.arc(x + 25, y + 25, 18, 0, Math.PI * 2);
+        pdfCtx.fill();
+        pdfCtx.fillStyle = '#ffffff';
+        pdfCtx.font = 'bold 16px Georgia';
+        pdfCtx.textAlign = 'center';
+        pdfCtx.fillText((index + 1).toString(), x + 25, y + 30);
+
+        // Favorite star indicator
+        if (material.isFavorite) {
+            pdfCtx.fillStyle = '#f1c40f';
+            pdfCtx.font = '20px Georgia';
+            pdfCtx.fillText('★', x + cardWidth - 25, y + 30);
+        }
+
+        // Material name with manufacturer on separate lines for better readability
+        pdfCtx.fillStyle = '#1a1a1a';
+        pdfCtx.textAlign = 'center';
+
+        // Log the material info for debugging
+        console.log(`Drawing card ${index}: name="${material.name}", manufacturer="${material.manufacturer}"`);
+
+        // Draw manufacturer on first line (if available)
+        if (material.manufacturer) {
+            pdfCtx.font = 'bold 12px Georgia';
+            const mfgDisplay = material.manufacturer.length > 35 ? material.manufacturer.substring(0, 33) + '...' : material.manufacturer;
+            pdfCtx.fillText(mfgDisplay, x + cardWidth / 2, y + imageSize + 32);
+
+            // Draw product name on second line
+            pdfCtx.font = '12px Georgia';
+            pdfCtx.fillStyle = '#444444';
+            const nameDisplay = material.name.length > 35 ? material.name.substring(0, 33) + '...' : material.name;
+            pdfCtx.fillText(nameDisplay, x + cardWidth / 2, y + imageSize + 48);
+        } else {
+            // No manufacturer - just show name
+            pdfCtx.font = 'bold 13px Georgia';
+            const nameDisplay = material.name.length > 35 ? material.name.substring(0, 33) + '...' : material.name;
+            pdfCtx.fillText(nameDisplay, x + cardWidth / 2, y + imageSize + 40);
+        }
+
+        // Get notes from favorites if this is a favorite
+        const favMaterial = favoriteMaterials.find(f => f.url === material.url);
+        const notes = favMaterial ? favMaterial.notes : '';
+
+        // Notes (if any) - from favorites - adjust position based on whether manufacturer exists
+        const notesStartY = material.manufacturer ? y + imageSize + 65 : y + imageSize + 58;
+        if (notes) {
+            pdfCtx.fillStyle = '#444444';
+            pdfCtx.font = 'italic 11px Georgia';
+            pdfCtx.textAlign = 'left';
+            const maxNotesWidth = cardWidth - 20;
+            const noteLines = wrapText(pdfCtx, notes, maxNotesWidth);
+            noteLines.slice(0, 2).forEach((line, i) => {
+                pdfCtx.fillText(line, x + 10, notesStartY + i * 14);
+            });
+        }
+    }
+
+    // Helper to wrap text
+    function wrapText(ctx, text, maxWidth) {
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = '';
+
+        words.forEach(word => {
+            const testLine = currentLine + (currentLine ? ' ' : '') + word;
+            if (ctx.measureText(testLine).width > maxWidth && currentLine) {
+                lines.push(currentLine);
+                currentLine = word;
+            } else {
+                currentLine = testLine;
+            }
+        });
+        if (currentLine) lines.push(currentLine);
+        return lines;
+    }
+
+    // Load and draw each material from canvasMaterials
+    canvasMaterials.forEach((material, index) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function() {
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            const x = padding + col * (cardWidth + gap);
+            const y = 130 + row * (cardHeight + gap);
+
+            // Draw card first
+            drawMaterialCard(material, index);
+
+            // Draw image centered in card
+            const imgX = x + (cardWidth - imageSize) / 2;
+            const imgY = y + 15;
+            pdfCtx.drawImage(img, imgX, imgY, imageSize, imageSize);
+
+            loadedCount++;
+            if (loadedCount === totalImages) {
+                // All images loaded, trigger download
+                triggerPDFDownload();
+            }
+        };
+        img.onerror = function() {
+            drawMaterialCard(material, index);
+            loadedCount++;
+            if (loadedCount === totalImages) {
+                triggerPDFDownload();
+            }
+        };
+        img.src = material.url;
+    });
+
+    function triggerPDFDownload() {
+        // Add footer
+        pdfCtx.fillStyle = '#5D4E37';
+        pdfCtx.font = '12px Georgia';
+        pdfCtx.textAlign = 'center';
+        pdfCtx.fillText('Generated by Stone Visualizer', pageWidth / 2, pageHeight - 30);
+
+        // Download as image (PDF would require a library)
+        const link = document.createElement('a');
+        link.download = 'My-Material-Selections.png';
+        link.href = pdfCanvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showMessage('Selections downloaded!');
+    }
+
+    // If no images, still trigger download
+    if (totalImages === 0) {
+        triggerPDFDownload();
+    }
+}
+
+// Update My Selections panel (called when notes change)
+function updateMySelectionsPanel() {
+    const panel = document.getElementById('my-selections-list');
+    if (!panel) return;
+    renderMySelectionsList();
+}
+
+// Render the My Selections list in sidebar (shows FAVORITES only)
+function renderMySelectionsList() {
+    const listContainer = document.getElementById('my-selections-list');
+    if (!listContainer) return;
+
+    if (favoriteMaterials.length === 0) {
+        listContainer.innerHTML = '<div style="color: #888; font-size: 12px; text-align: center; padding: 20px;">No favorites yet.<br>Click the ★ star on canvas panels to add favorites here.</div>';
+        return;
+    }
+
+    listContainer.innerHTML = favoriteMaterials.map((material, index) => `
+        <div class="selection-item" data-url="${material.url}" style="background: #3a3a3a; border-radius: 6px; padding: 10px; margin-bottom: 8px; border: 1px solid #f1c40f;">
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <div style="position: relative;">
+                    <img src="${material.url}" alt="${material.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #505050;">
+                    <span style="position: absolute; top: -5px; right: -5px; color: #f1c40f; font-size: 16px;">★</span>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 500; font-size: 12px; color: #e0e0e0; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${material.manufacturer ? material.manufacturer + ' - ' : ''}${material.name}</div>
+                    <textarea
+                        class="selection-notes-input"
+                        data-url="${material.url}"
+                        placeholder="Add notes..."
+                        style="width: 100%; margin-top: 6px; padding: 6px; font-size: 11px; border: 1px solid #505050; border-radius: 4px; background: #2a2a2a; color: #e0e0e0; resize: vertical; min-height: 40px; box-sizing: border-box;"
+                    >${material.notes || ''}</textarea>
+                </div>
+                <button class="remove-favorite-btn" data-url="${material.url}" style="background: #e74c3c; border: none; color: white; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 1;" title="Remove from favorites">×</button>
+            </div>
+        </div>
+    `).join('');
+
+    // Add event listeners for notes
+    listContainer.querySelectorAll('.selection-notes-input').forEach(textarea => {
+        textarea.addEventListener('change', function() {
+            const url = this.dataset.url;
+            const favIndex = favoriteMaterials.findIndex(m => m.url === url);
+            if (favIndex >= 0) {
+                favoriteMaterials[favIndex].notes = this.value;
+                saveFavoriteMaterials();
+            }
+        });
+    });
+
+    // Add event listeners for remove button
+    listContainer.querySelectorAll('.remove-favorite-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const url = this.dataset.url;
+            // Find and unfavorite the material on canvas
+            const canvasIndex = canvasMaterials.findIndex(m => m.url === url);
+            if (canvasIndex >= 0) {
+                toggleMaterialFavorite(canvasIndex);
+            } else {
+                // Material not on canvas, just remove from favorites
+                const favIndex = favoriteMaterials.findIndex(m => m.url === url);
+                if (favIndex >= 0) {
+                    favoriteMaterials.splice(favIndex, 1);
+                    saveFavoriteMaterials();
+                    renderMySelectionsList();
+                }
+            }
+        });
+    });
+}
+
+// Show material info popup
+function showMaterialInfoPopup(materialIndex) {
+    if (materialIndex < 0 || materialIndex >= canvasMaterials.length) return;
+
+    const material = canvasMaterials[materialIndex];
+
+    // Remove any existing popup
+    const existingPopup = document.getElementById('material-info-popup');
+    if (existingPopup) {
+        existingPopup.remove();
+    }
+
+    // Create popup overlay
+    const popup = document.createElement('div');
+    popup.id = 'material-info-popup';
+    popup.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    `;
+
+    // Create popup content
+    const popupContent = document.createElement('div');
+    popupContent.style.cssText = `
+        background: #2d2d2d;
+        border-radius: 12px;
+        padding: 25px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        border: 2px solid #5D4E37;
+    `;
+
+    // Get favorite info if available
+    const favMaterial = favoriteMaterials.find(f => f.url === material.url);
+
+    popupContent.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: #fff; font-family: Georgia, serif; font-size: 20px;">${material.manufacturer ? material.manufacturer + ' - ' : ''}${material.name}</h2>
+            <button id="close-info-popup" style="background: #e74c3c; border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1;">×</button>
+        </div>
+        <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+            <img src="${material.url}" alt="${material.name}" style="width: 150px; height: 150px; object-fit: cover; border-radius: 8px; border: 2px solid #5D4E37;">
+            <div style="flex: 1;">
+                <div style="margin-bottom: 10px;">
+                    <span style="color: #888; font-size: 12px;">Manufacturer:</span>
+                    <div style="color: #e0e0e0; font-size: 14px;">${material.manufacturer || 'Not specified'}</div>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <span style="color: #888; font-size: 12px;">Product Name:</span>
+                    <div style="color: #e0e0e0; font-size: 14px;">${material.name}</div>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <span style="color: #888; font-size: 12px;">Status:</span>
+                    <div style="color: ${material.isFavorite ? '#f1c40f' : '#888'}; font-size: 14px;">${material.isFavorite ? '★ Favorite' : 'Not favorited'}</div>
+                </div>
+            </div>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <span style="color: #888; font-size: 12px;">Dimensions / Specifications:</span>
+            <div id="material-dimensions" style="color: #e0e0e0; font-size: 14px; padding: 10px; background: #3a3a3a; border-radius: 6px; margin-top: 5px;">
+                <em style="color: #666;">Dimensions data not available yet. This can be added later.</em>
+            </div>
+        </div>
+        ${favMaterial ? `
+        <div style="margin-bottom: 15px;">
+            <span style="color: #888; font-size: 12px;">Notes:</span>
+            <div style="color: #e0e0e0; font-size: 14px; padding: 10px; background: #3a3a3a; border-radius: 6px; margin-top: 5px;">
+                ${favMaterial.notes || '<em style="color: #666;">No notes added yet.</em>'}
+            </div>
+        </div>
+        ` : ''}
+    `;
+
+    popup.appendChild(popupContent);
+    document.body.appendChild(popup);
+
+    // Close on backdrop click
+    popup.addEventListener('click', function(e) {
+        if (e.target === popup) {
+            popup.remove();
+        }
+    });
+
+    // Close button
+    document.getElementById('close-info-popup').addEventListener('click', function() {
+        popup.remove();
+    });
+
+    // Close on Escape key
+    const escHandler = function(e) {
+        if (e.key === 'Escape') {
+            popup.remove();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+// ========== END MATERIAL SELECTOR FUNCTIONS ==========
+
 function clearAllActiveButtons() {
     console.log('clearAllActiveButtons called, isDrawingToolsActive is:', isDrawingToolsActive);
     
@@ -7137,7 +9998,192 @@ function clearAllActiveButtons() {
     console.log('clearAllActiveButtons finished, isDrawingToolsActive is:', isDrawingToolsActive);
 }
 
+// Generate dynamic SVG for Featured Panel Wall
+function generatePanelWallSVG(rows, cols) {
+    const canvasWidth = 1600;
+    const canvasHeight = 960;
+    const padding = 50;
+    const titleHeight = 50;
+    const gap = 25;
 
+    const availableWidth = canvasWidth - (padding * 2) - (gap * (cols - 1));
+    const availableHeight = canvasHeight - (padding * 2) - titleHeight - (gap * (rows - 1));
+    const panelWidth = Math.floor(availableWidth / cols);
+    const panelHeight = Math.floor(availableHeight / rows);
+
+    let boxesSVG = '';
+    let panelNum = 1;
+
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const x = padding + col * (panelWidth + gap);
+            const y = padding + titleHeight + row * (panelHeight + gap);
+
+            boxesSVG += `
+  <!-- Box ${panelNum} (Row ${row + 1}, Col ${col + 1}) -->
+  <rect x="${x}" y="${y}" width="${panelWidth}" height="${panelHeight}" fill="#2d2d2d" stroke="#404040" stroke-width="2"/>
+  <circle cx="${x + 35}" cy="${y + 35}" r="25" fill="#3498db"/>
+  <text x="${x + 35}" y="${y + 42}" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="20" font-weight="bold">${panelNum}</text>
+  <text x="${x + panelWidth/2}" y="${y + panelHeight/2}" text-anchor="middle" fill="#666666" font-family="Arial, sans-serif" font-size="36">Option ${panelNum}</text>
+  <text x="${x + panelWidth/2}" y="${y + panelHeight/2 + 40}" text-anchor="middle" fill="#555555" font-family="Arial, sans-serif" font-size="14">Select material below</text>
+`;
+            panelNum++;
+        }
+    }
+
+    const totalPanels = rows * cols;
+    const titleText = totalPanels === 1
+        ? 'FEATURED MATERIAL - Compare your selection'
+        : `FEATURED MATERIALS - Compare up to ${totalPanels} options`;
+
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}">
+  <!-- Background -->
+  <rect width="${canvasWidth}" height="${canvasHeight}" fill="#1a1a1a"/>
+
+  <!-- Title Bar -->
+  <rect width="${canvasWidth}" height="${titleHeight}" fill="#2d2d2d"/>
+  <line x1="0" y1="${titleHeight}" x2="${canvasWidth}" y2="${titleHeight}" stroke="#404040" stroke-width="1"/>
+  <text x="${canvasWidth/2}" y="30" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="24" font-weight="bold">${titleText}</text>
+${boxesSVG}
+</svg>`;
+
+    return svgContent;
+}
+
+// Generate panel grid for Featured Panel Wall
+function generatePanelGrid(rows, cols) {
+    // Canvas dimensions (based on the SVG: 1600x960)
+    const canvasWidth = 1600;
+    const canvasHeight = 960;
+
+    // Layout settings
+    const padding = 50; // Padding from edges
+    const titleHeight = 50; // Height of title bar
+    const gap = 25; // Gap between panels
+
+    // Calculate available space
+    const availableWidth = canvasWidth - (padding * 2) - (gap * (cols - 1));
+    const availableHeight = canvasHeight - (padding * 2) - titleHeight - (gap * (rows - 1));
+
+    // Calculate panel dimensions
+    const panelWidth = Math.floor(availableWidth / cols);
+    const panelHeight = Math.floor(availableHeight / rows);
+
+    // Clear existing areas
+    areas = [];
+    selectedAreaIndex = -1;
+
+    // Generate panels
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const x = padding + col * (panelWidth + gap);
+            const y = padding + titleHeight + row * (panelHeight + gap);
+            const panelNum = row * cols + col + 1;
+
+            // Create area with 4 corner points (rectangle)
+            const newArea = {
+                id: Date.now() + panelNum,
+                points: [
+                    { x: x, y: y },
+                    { x: x + panelWidth, y: y },
+                    { x: x + panelWidth, y: y + panelHeight },
+                    { x: x, y: y + panelHeight }
+                ],
+                stone: null,
+                scale: 150,
+                rotation: 0,
+                brightness: 100,
+                textureMode: 'stone_linear',
+                panelNumber: panelNum
+            };
+
+            areas.push(newArea);
+        }
+    }
+
+    console.log(`Generated ${rows}x${cols} panel grid with ${areas.length} panels`);
+
+    // Generate and load the new SVG background
+    const svgContent = generatePanelWallSVG(rows, cols);
+    const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    // Load the new SVG as the background image
+    const newImage = new Image();
+    newImage.onload = function() {
+        currentImage = newImage;
+        URL.revokeObjectURL(svgUrl); // Clean up
+        updateAreasList();
+        drawCanvas();
+        showMessage(`Generated ${rows} x ${cols} panel grid (${areas.length} panels)`);
+    };
+    newImage.onerror = function() {
+        console.error('Failed to load generated SVG');
+        URL.revokeObjectURL(svgUrl);
+        // Still update the areas even if SVG fails
+        updateAreasList();
+        drawCanvas();
+        showMessage(`Generated ${rows} x ${cols} panel grid (${areas.length} panels)`);
+    };
+    newImage.src = svgUrl;
+}
+
+// Setup panel grid controls
+function setupPanelGridControls() {
+    const panelRowsSelect = document.getElementById('panel-rows');
+    const panelColsSelect = document.getElementById('panel-cols');
+    const panelTotalSpan = document.getElementById('panel-total');
+    const generatePanelsBtn = document.getElementById('generate-panels-btn');
+
+    // Clear All Stars button for Material Selector mode - set up BEFORE checking for panel grid elements
+    const clearStarredBtn = document.getElementById('clear-starred-btn');
+    if (clearStarredBtn) {
+        clearStarredBtn.addEventListener('click', clearAllStarredMaterials);
+        console.log('Clear starred button listener attached');
+    }
+
+    // Download Selections button - set up BEFORE checking for panel grid elements
+    const downloadSelectionsBtn = document.getElementById('download-selections-btn');
+    if (downloadSelectionsBtn) {
+        downloadSelectionsBtn.addEventListener('click', function() {
+            console.log('Download button clicked!');
+            downloadSelectionsPDF();
+        });
+        console.log('Download selections button listener attached');
+    }
+
+    if (!panelRowsSelect || !panelColsSelect || !panelTotalSpan || !generatePanelsBtn) {
+        console.log('Panel grid controls not found, but material selector controls are set up');
+        return;
+    }
+
+    // Update total count when rows or columns change
+    function updatePanelTotal() {
+        const rows = parseInt(panelRowsSelect.value);
+        const cols = parseInt(panelColsSelect.value);
+        panelTotalSpan.textContent = rows * cols;
+    }
+
+    panelRowsSelect.addEventListener('change', updatePanelTotal);
+    panelColsSelect.addEventListener('change', updatePanelTotal);
+
+    // Generate panels button
+    generatePanelsBtn.addEventListener('click', function() {
+        const rows = parseInt(panelRowsSelect.value);
+        const cols = parseInt(panelColsSelect.value);
+
+        // Confirm if there are existing areas
+        if (areas.length > 0) {
+            if (!confirm(`This will replace ${areas.length} existing area(s). Continue?`)) {
+                return;
+            }
+        }
+
+        generatePanelGrid(rows, cols);
+    });
+
+    console.log('Panel grid controls initialized');
+}
 
 function setupButtonListeners() {
     console.log('setupButtonListeners() function is running!');
@@ -7148,7 +10194,8 @@ const addDepthEdgeBtn = document.getElementById('add-depth-edge-btn');
     const clearBtn = document.getElementById('clear-btn');
     const downloadBtn = document.getElementById('download-btn');
     const saveAreasBtn = document.getElementById('save-areas-btn');
-    
+    const toggleLabelsBtn = document.getElementById('toggle-labels-btn');
+
     const undoBtn = document.getElementById('undo-btn');
     const redoBtn = document.getElementById('redo-btn');
     const copyBtn = document.getElementById('copy-btn');
@@ -7191,8 +10238,45 @@ if (downloadBtn) {
             this.parentElement.style.display = 'none';
         });
     });
-    
-    
+
+    // Toggle Labels Button - show/hide material labels on areas
+    console.log('Toggle Labels Button found:', !!toggleLabelsBtn);
+    if (toggleLabelsBtn) {
+        // Remove any existing listeners by cloning
+        const newToggleLabelsBtn = toggleLabelsBtn.cloneNode(true);
+        toggleLabelsBtn.parentNode.replaceChild(newToggleLabelsBtn, toggleLabelsBtn);
+
+        newToggleLabelsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            console.log('=== LABEL BUTTON CLICKED ===');
+            console.log('showMaterialLabels BEFORE toggle:', showMaterialLabels);
+
+            showMaterialLabels = !showMaterialLabels;
+
+            console.log('showMaterialLabels AFTER toggle:', showMaterialLabels);
+
+            this.classList.toggle('active', showMaterialLabels);
+            drawCanvas();
+            showMessage(showMaterialLabels ? 'Material labels enabled' : 'Material labels disabled');
+        }, { once: false, capture: true });
+    } else {
+        console.warn('Toggle Labels Button NOT FOUND - check element ID');
+    }
+
+    // Label Position Dropdown
+    const labelPositionSelect = document.getElementById('label-position-select');
+    if (labelPositionSelect) {
+        labelPositionSelect.addEventListener('change', function() {
+            labelPosition = this.value;
+            if (showMaterialLabels) {
+                drawCanvas();
+            }
+            showMessage(`Label position: ${this.value}`);
+        });
+    }
 
    // Drawing Tools Button - FIXED with !important override
 if (drawingToolsBtn) {
@@ -7212,6 +10296,15 @@ if (drawingToolsBtn) {
                 palette.classList.remove('hidden');
                 this.classList.add('active');
                 isDrawingToolsActive = true;
+
+                // CRITICAL: Reset drawing state when opening palette
+                // This prevents leftover state from causing brush to activate without click
+                isDrawingAnnotation = false;
+                drawingStartPoint = null;
+                currentAnnotationPath = [];
+                isDraggingAnnotation = false;
+                draggingEndpoint = null;
+
                 console.log('SET isDrawingToolsActive to TRUE');
                 
                 // FIXED: Use !important to override CSS !important
@@ -7888,6 +10981,39 @@ function setupControlListeners() {
                 GLOBAL_STONE_SCALE = value;
                 stonePatterns = {};
                 drawCanvas();
+            }
+        });
+    }
+
+    // Sync Scale button - applies current scale to all areas
+    const syncScaleBtn = document.getElementById('sync-scale-btn');
+    if (syncScaleBtn) {
+        syncScaleBtn.addEventListener('click', function() {
+            const scaleSlider = document.getElementById('scale-slider');
+            if (!scaleSlider) return;
+
+            const currentScale = parseInt(scaleSlider.value);
+            let syncCount = 0;
+
+            // Apply scale to all non-cutout areas
+            areas.forEach(area => {
+                if (area && !area.isCutout) {
+                    area.scale = currentScale;
+                    syncCount++;
+
+                    // Also update scale memory for the stone type
+                    if (area.stone) {
+                        stoneScaleMemory[area.stone] = currentScale;
+                    }
+                }
+            });
+
+            if (syncCount > 0) {
+                stonePatterns = {};
+                drawCanvas();
+                showMessage(`Scale (${currentScale}%) applied to ${syncCount} area${syncCount > 1 ? 's' : ''}`);
+            } else {
+                showMessage('No areas to sync');
             }
         });
     }
@@ -8870,7 +11996,9 @@ function handleThinBrickManufacturerChange(manufacturer) {
     const kingKlinkerView = document.getElementById('king-klinker-view');
     const hcMuddoxView = document.getElementById('hc-muddox-view');
     const interstateView = document.getElementById('interstate-brick-view');
-    
+    const metrobrickView = document.getElementById('metrobrick-view');
+    const rmsThinBrickView = document.getElementById('rocky-mountain-stoneworks-thin-brick-view');
+
     if (dutchQualityThinBrickView) dutchQualityThinBrickView.classList.remove('active');
     if (endicottView) endicottView.classList.remove('active');
     if (glenGeryView) glenGeryView.classList.remove('active');
@@ -8878,13 +12006,15 @@ function handleThinBrickManufacturerChange(manufacturer) {
     if (kingKlinkerView) kingKlinkerView.classList.remove('active');
     if (hcMuddoxView) hcMuddoxView.classList.remove('active');
     if (interstateView) interstateView.classList.remove('active');
-    
+    if (metrobrickView) metrobrickView.classList.remove('active');
+    if (rmsThinBrickView) rmsThinBrickView.classList.remove('active');
+
     // Show the selected manufacturer view
     const selectedView = document.getElementById(`${manufacturer}-view`);
     if (selectedView) {
         selectedView.classList.add('active');
     }
-    
+
     console.log('Thin Brick manufacturer changed to:', manufacturer);
 }
 
@@ -9383,6 +12513,48 @@ function loadStonesByManufacturer() {
         }
     });
 
+    // Load Metrobrick materials
+    METROBRICK_MATERIALS.forEach(material => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = function() {
+            stoneImages[material.url] = img;
+        };
+        img.src = material.url;
+
+        // Add to Metrobrick all grid
+        const metrobrickAllGrid = document.getElementById('metrobrick-all-grid');
+        if (metrobrickAllGrid) {
+            const item = createMaterialThumbnail(material.url, material.name, 'thin-brick');
+            metrobrickAllGrid.appendChild(item);
+        }
+    });
+
+    // Load Rocky Mountain Stoneworks Thin Brick materials
+    RMS_THIN_BRICK_MATERIALS.forEach(material => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = function() {
+            stoneImages[material.url] = img;
+        };
+        img.src = material.url;
+
+        // Add to RMS Thin Brick all grid
+        const rmsAllGrid = document.getElementById('rms-thin-brick-all-grid');
+        if (rmsAllGrid) {
+            const item = createMaterialThumbnail(material.url, material.name, 'thin-brick');
+            rmsAllGrid.appendChild(item);
+        }
+
+        // Add to specific profile grid
+        const profileGridId = `rms-thin-brick-${material.profile}-grid`;
+        const profileGrid = document.getElementById(profileGridId);
+        if (profileGrid) {
+            const item = createMaterialThumbnail(material.url, material.name, 'thin-brick');
+            profileGrid.appendChild(item);
+        }
+    });
+
 } // <-- FIXED: This closes the entire loadStonesByManufacturer function
 
 
@@ -9612,6 +12784,44 @@ function setupCanvasListeners() {
         const coords = getCanvasCoordinates(e);
 const x = coords.x;
 const y = coords.y;
+
+        // Check for button clicks in material selector mode
+        if (isMaterialSelectorMode) {
+            // Check for X button clicks (remove from canvas)
+            if (materialSelectorRemoveButtons.length > 0) {
+                for (let i = 0; i < materialSelectorRemoveButtons.length; i++) {
+                    const btn = materialSelectorRemoveButtons[i];
+                    const dist = Math.sqrt(Math.pow(x - btn.x, 2) + Math.pow(y - btn.y, 2));
+                    if (dist <= btn.radius) {
+                        removeMaterialFromCanvas(btn.materialIndex);
+                        return;
+                    }
+                }
+            }
+            // Check for star/favorite button clicks
+            if (materialSelectorFavoriteButtons.length > 0) {
+                for (let i = 0; i < materialSelectorFavoriteButtons.length; i++) {
+                    const btn = materialSelectorFavoriteButtons[i];
+                    const dist = Math.sqrt(Math.pow(x - btn.x, 2) + Math.pow(y - btn.y, 2));
+                    if (dist <= btn.radius) {
+                        toggleMaterialFavorite(btn.materialIndex);
+                        return;
+                    }
+                }
+            }
+            // Check for More Info button clicks
+            if (materialSelectorInfoButtons.length > 0) {
+                for (let i = 0; i < materialSelectorInfoButtons.length; i++) {
+                    const btn = materialSelectorInfoButtons[i];
+                    // Check if click is within the button rectangle
+                    if (x >= btn.x - btn.width/2 && x <= btn.x + btn.width/2 &&
+                        y >= btn.y - btn.height/2 && y <= btn.y + btn.height/2) {
+                        showMaterialInfoPopup(btn.materialIndex);
+                        return;
+                    }
+                }
+            }
+        }
 
         if (isAddingDecoration) {
             saveState();
@@ -10389,8 +13599,85 @@ if (e.ctrlKey || e.metaKey) {
         const coords = getCanvasCoordinates(e);
 const x = coords.x;
 const y = coords.y;
-        
+
         lastMousePosition = { x, y };
+
+        // Check for button/panel hover in material selector mode
+        if (isMaterialSelectorMode) {
+            let newHoverState = { panelIndex: -1, buttonType: null, buttonIndex: -1 };
+            let overButton = false;
+
+            // Check remove buttons
+            for (let i = 0; i < materialSelectorRemoveButtons.length; i++) {
+                const btn = materialSelectorRemoveButtons[i];
+                const dist = Math.sqrt(Math.pow(x - btn.x, 2) + Math.pow(y - btn.y, 2));
+                if (dist <= btn.radius + 4) { // Slightly larger hit area
+                    newHoverState = { panelIndex: btn.materialIndex, buttonType: 'remove', buttonIndex: i };
+                    overButton = true;
+                    break;
+                }
+            }
+
+            // Check favorite buttons
+            if (!overButton) {
+                for (let i = 0; i < materialSelectorFavoriteButtons.length; i++) {
+                    const btn = materialSelectorFavoriteButtons[i];
+                    const dist = Math.sqrt(Math.pow(x - btn.x, 2) + Math.pow(y - btn.y, 2));
+                    if (dist <= btn.radius + 4) {
+                        newHoverState = { panelIndex: btn.materialIndex, buttonType: 'favorite', buttonIndex: i };
+                        overButton = true;
+                        break;
+                    }
+                }
+            }
+
+            // Check info buttons
+            if (!overButton) {
+                for (let i = 0; i < materialSelectorInfoButtons.length; i++) {
+                    const btn = materialSelectorInfoButtons[i];
+                    if (x >= btn.x - btn.width/2 - 4 && x <= btn.x + btn.width/2 + 4 &&
+                        y >= btn.y - btn.height/2 - 4 && y <= btn.y + btn.height/2 + 4) {
+                        newHoverState = { panelIndex: btn.materialIndex, buttonType: 'info', buttonIndex: i };
+                        overButton = true;
+                        break;
+                    }
+                }
+            }
+
+            // Check if hovering over any panel (for panel hover effect)
+            if (!overButton && areas.length > 0) {
+                for (let i = 0; i < areas.length; i++) {
+                    const area = areas[i];
+                    if (area && area.points && area.points.length >= 4) {
+                        const minX = Math.min(...area.points.map(p => p.x));
+                        const maxX = Math.max(...area.points.map(p => p.x));
+                        const minY = Math.min(...area.points.map(p => p.y));
+                        const maxY = Math.max(...area.points.map(p => p.y));
+                        if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+                            newHoverState.panelIndex = area.materialIndex !== undefined ? area.materialIndex : i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Check if hover state changed - if so, redraw
+            const stateChanged = newHoverState.panelIndex !== materialSelectorHoverState.panelIndex ||
+                                 newHoverState.buttonType !== materialSelectorHoverState.buttonType;
+            materialSelectorHoverState = newHoverState;
+
+            if (stateChanged) {
+                drawCanvas();
+            }
+
+            // Set cursor - pointer for buttons/panels, default otherwise
+            if (overButton || newHoverState.panelIndex >= 0) {
+                canvas.style.cursor = 'pointer';
+            } else {
+                canvas.style.cursor = 'default';
+            }
+        }
+
       // Handle rectangle drawing preview
 // Handle rectangle drawing preview
 if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint) {
@@ -11008,6 +14295,53 @@ if (houseSelect) {
     const selectedImagePath = this.value;
     console.log('Loading house image:', selectedImagePath);
     console.log('House key for this image:', getHouseKey(selectedImagePath));
+
+    // Check if Material Selector mode
+    if (selectedImagePath === 'material-selector') {
+        // Clear all drawings from previous canvas - Material Selector has its own areas
+        areas = [];
+        depthEdges = [];
+        sills = [];
+        brickRows = [];
+        decorations = [];
+        accents = [];
+        annotations = [];
+        selectedAreaIndex = -1;
+        selectedDepthEdgeIndex = -1;
+        selectedSillIndex = -1;
+        selectedBrickRowIndex = -1;
+        selectedDecorationIndex = -1;
+        selectedAccentIndex = -1;
+        selectedAnnotation = null;
+        isInDrawingMode = false;
+        stonePatterns = {};
+        processedSingleImages = {};
+
+        isMaterialSelectorMode = true;
+        initMaterialSelectorMode();
+
+        // Show panel grid controls
+        const panelControls = document.getElementById('panel-grid-controls');
+        if (panelControls) {
+            panelControls.style.display = 'block';
+        }
+
+        previousHouseValue = selectedImagePath;
+        isChangingHouses = false;
+        return; // Don't load as normal house image
+    } else {
+        isMaterialSelectorMode = false;
+        // Hide panel grid controls for non-material-selector and non-panel-wall
+        const panelControls = document.getElementById('panel-grid-controls');
+        if (panelControls) {
+            if (selectedImagePath.includes('Featured-Panel-Wall')) {
+                panelControls.style.display = 'block';
+            } else {
+                panelControls.style.display = 'none';
+            }
+        }
+    }
+
     loadHouseImage(selectedImagePath);
     
     // Clear all elements first
@@ -11069,10 +14403,35 @@ if (houseKey && housePresets[houseKey]) {
     // Remember this house for next time
     previousHouseValue = selectedImagePath;
     isChangingHouses = false; // Re-enable auto-save
+
+    // Show/hide panel grid controls for Featured Panel Wall
+    const panelGridControls = document.getElementById('panel-grid-controls');
+    if (panelGridControls) {
+        if (selectedImagePath.includes('Featured-Panel-Wall')) {
+            panelGridControls.style.display = 'block';
+        } else {
+            panelGridControls.style.display = 'none';
+        }
+    }
 });
-    
-    // Load the default house image
-    loadHouseImage(houseSelect.value);
+
+    // Load the default view - check if Material Selector
+    if (houseSelect.value === 'material-selector') {
+        isMaterialSelectorMode = true;
+        initMaterialSelectorMode();
+    } else {
+        loadHouseImage(houseSelect.value);
+    }
+
+    // Check if panel controls should be visible on load
+    const panelGridControls = document.getElementById('panel-grid-controls');
+    if (panelGridControls) {
+        if (houseSelect.value === 'material-selector' || houseSelect.value.includes('Featured-Panel-Wall')) {
+            panelGridControls.style.display = 'block';
+        } else {
+            panelGridControls.style.display = 'none';
+        }
+    }
 } else {
     console.log('No house selector found, drawing empty canvas');
     drawCanvas();
@@ -11107,6 +14466,9 @@ drawingCanvas.addEventListener('click', function(e) {
   setupTextEditingModal();
   initializeFilters();
 setupFilterEventListeners();
+
+    // Panel Grid Controls for Featured Panel Wall
+    setupPanelGridControls();
     
     // Load stone scale memory from localStorage if available
     try {

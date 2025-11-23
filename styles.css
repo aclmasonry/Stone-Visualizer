@@ -1369,6 +1369,41 @@ canvas {
     transform: translateY(-2px);
 }
 
+/* Star button for material selector */
+.material-star-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 22px;
+    text-align: center;
+    color: #999;
+    transition: all 0.2s ease;
+    z-index: 10;
+    padding: 0;
+}
+
+.material-star-btn:hover {
+    background: rgba(0, 0, 0, 0.6);
+    color: #ffd700;
+    transform: scale(1.1);
+}
+
+.material-star-btn.starred {
+    background: #ffd700;
+    color: #fff;
+}
+
+.material-star-btn.starred:hover {
+    background: #ffcc00;
+}
+
 .material-item img,
 .material-preview {
     width: 70px;
@@ -2502,5 +2537,402 @@ input[type="range"]:focus {
     display: block !important;
     position: relative !important;
     z-index: 999999 !important;
+}
+
+/* ============================================
+   ENHANCED DRAWING TOOLS PALETTE STYLES
+   ============================================ */
+
+/* Make palette scrollable and wider */
+.drawing-tools-palette {
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+    width: 320px !important;
+    min-width: 320px !important;
+}
+
+/* Tools Sections */
+.tools-section {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.tools-section:last-child {
+    border-bottom: none;
+}
+
+.tools-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Shapes Grid - smaller buttons */
+.shapes-grid {
+    grid-template-columns: repeat(6, 1fr) !important;
+}
+
+.shapes-grid .tool-btn {
+    padding: 8px !important;
+    font-size: 16px !important;
+}
+
+/* Shape Options */
+.shape-options {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #555;
+}
+
+.shape-options label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.shape-options input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.shape-options input[type="number"] {
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+/* Brush Presets */
+.brush-presets {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.brush-preset {
+    background: #f0f0f0;
+    border: 2px solid #ccc;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    color: #333;
+}
+
+.brush-preset:nth-child(1) { width: 20px; height: 20px; font-size: 6px; }
+.brush-preset:nth-child(2) { width: 26px; height: 26px; font-size: 10px; }
+.brush-preset:nth-child(3) { width: 32px; height: 32px; font-size: 14px; }
+.brush-preset:nth-child(4) { width: 40px; height: 40px; font-size: 20px; }
+.brush-preset:nth-child(5) { width: 50px; height: 50px; font-size: 28px; }
+
+.brush-preset:hover {
+    border-color: #3498db;
+    background: #e8f4fc;
+}
+
+.brush-preset.active {
+    border-color: #3498db;
+    background: #3498db;
+    color: white;
+}
+
+/* Controls */
+.control-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 12px;
+}
+
+.control-row:last-child {
+    margin-bottom: 0;
+}
+
+.control-row label {
+    font-size: 12px;
+    color: #555;
+    display: flex;
+    justify-content: space-between;
+}
+
+.control-row input[type="range"] {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #e0e0e0;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.control-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #3498db;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.control-row input[type="color"] {
+    width: 100%;
+    height: 32px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 2px;
+}
+
+/* Layers Panel */
+.layers-section {
+    background: #f8f9fa;
+}
+
+.layers-list {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
+.layer-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background 0.2s;
+    gap: 8px;
+}
+
+.layer-item:last-child {
+    border-bottom: none;
+}
+
+.layer-item:hover {
+    background: #f0f0f0;
+}
+
+.layer-item.active {
+    background: #e3f2fd;
+    border-left: 3px solid #3498db;
+}
+
+.layer-visibility, .layer-lock {
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.layer-visibility:hover, .layer-lock:hover {
+    opacity: 1;
+}
+
+.layer-name {
+    flex: 1;
+    font-size: 13px;
+    color: #333;
+}
+
+.layer-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.layer-action-btn {
+    background: #e0e0e0;
+    border: none;
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.layer-action-btn:hover {
+    background: #3498db;
+    color: white;
+}
+
+.layer-blend-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.layer-blend-options label {
+    font-size: 12px;
+    color: #555;
+}
+
+.layer-blend-options select {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 12px;
+    background: white;
+    cursor: pointer;
+}
+
+.layer-blend-options input[type="range"] {
+    width: 100%;
+}
+
+/* Adjustments Panel */
+.adjustments-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.adjustment-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.adjustment-row label {
+    font-size: 12px;
+    color: #555;
+    display: flex;
+    justify-content: space-between;
+}
+
+.adjustment-row input[type="range"] {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #e0e0e0;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.adjustment-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #3498db;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.apply-btn, .reset-btn, .flatten-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+    margin-top: 5px;
+}
+
+.apply-btn {
+    background: #27ae60;
+    color: white;
+}
+
+.apply-btn:hover {
+    background: #219a52;
+}
+
+.reset-btn {
+    background: #e74c3c;
+    color: white;
+}
+
+.reset-btn:hover {
+    background: #c0392b;
+}
+
+.flatten-btn {
+    background: #9b59b6;
+    color: white;
+}
+
+.flatten-btn:hover {
+    background: #8e44ad;
+}
+
+/* Action Buttons */
+.tools-action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tools-action-buttons button {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.clear-drawings-btn {
+    background: #e74c3c !important;
+    color: white !important;
+    border: none !important;
+}
+
+.clear-drawings-btn:hover {
+    background: #c0392b !important;
+}
+
+.delete-selected-btn {
+    background: #f39c12 !important;
+    color: white !important;
+    border: none !important;
+}
+
+.delete-selected-btn:hover {
+    background: #d68910 !important;
+}
+
+/* Eraser cursor */
+.cursor-eraser {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" fill="white" stroke="black" stroke-width="2"/></svg>') 12 12, crosshair;
+}
+
+/* Fill bucket cursor */
+.cursor-fill {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" fill="currentColor"/></svg>') 12 12, crosshair;
+}
+
+/* Scrollbar styling for tools palette */
+.drawing-tools-palette::-webkit-scrollbar {
+    width: 8px;
+}
+
+.drawing-tools-palette::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.drawing-tools-palette::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.drawing-tools-palette::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
 }
 

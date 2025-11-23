@@ -62,11 +62,23 @@
                 <span class="toolbar-icon">✕</span>
                 <span class="toolbar-label">Clear All</span>
             </button>
-         
+            <button id="toggle-labels-btn" class="toolbar-btn" title="Show/Hide Material Labels">
+                <span class="toolbar-icon">🏷️</span>
+                <span class="toolbar-label">Labels</span>
+            </button>
+            <select id="label-position-select" class="toolbar-select" title="Label Position" style="padding: 4px 8px; font-size: 11px; border-radius: 4px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #505050; cursor: pointer;">
+                <option value="center">Center</option>
+                <option value="top">Top</option>
+                <option value="bottom">Bottom</option>
+                <option value="top-left">Top Left</option>
+                <option value="top-right">Top Right</option>
+                <option value="bottom-left">Bottom Left</option>
+                <option value="bottom-right">Bottom Right</option>
+            </select>
         </div>
-        
+
         <div class="toolbar-divider"></div>
-        
+
         <!-- Texture Mode Controls -->
 <div class="toolbar-section">
     <button id="stone-mode-btn" class="toolbar-btn texture-mode-btn active" title="Stone Linear Mode">
@@ -115,9 +127,11 @@
                 <h3>House Selection</h3>
                 <div class="house-selection">
                     <select id="house-select" class="house-dropdown">
+            <option value="material-selector" selected>Material Selector</option>
             <option value="./Images/Canvas Images/Accent Room.jpg">Accent Room</option>
             <option value="./Images/Canvas Images/Brick Wall Interior.jpg">Brick Wall Interior</option>
-            <option value="./Images/Canvas Images/Canvas-house-1.jpg" selected>Canvas House 1</option>
+            <option value="./Images/Canvas Images/Canvas-house-1.jpg">Canvas House 1</option>
+            <option value="./Images/Canvas Images/Featured-Panel-Wall.svg">Featured Panel Wall (6 Options)</option>
             <option value="./Images/Canvas Images/Contemporary Lounge.jpg">Contemporary Lounge</option>
             <option value="./Images/Canvas Images/Cozy Living Room.jpg">Cozy Living Room</option>
             <option value="./Images/Canvas Images/Craftsman Triple Garage Home.jpg">Craftsman Triple Garage Home</option>
@@ -137,6 +151,30 @@
 </div>
                 </div>
                 <input type="file" id="house-upload" accept="image/*" style="display: none;">
+
+                <!-- Material Selector Controls -->
+                <div id="panel-grid-controls" class="panel-grid-controls" style="display: block; margin-top: 15px; padding: 12px; background: #2a2a2a; border-radius: 6px; border: 1px solid #404040;">
+                    <h4 style="margin: 0 0 10px 0; color: #3498db; font-size: 13px;">Material Selector</h4>
+                    <p style="font-size: 11px; color: #888; margin: 0 0 10px 0;">Click on any material below to add it to the canvas. Click ★ on canvas to add to favorites.</p>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap;">
+                        <span style="font-size: 12px; color: #ccc;">On Canvas: <strong id="starred-count" style="color: #3498db;">0</strong> / 12</span>
+                        <button id="clear-starred-btn" style="padding: 4px 10px; font-size: 11px; border: none; border-radius: 4px; background: #505050; color: #ccc; cursor: pointer;">Clear All</button>
+                        <button id="download-selections-btn" style="padding: 4px 10px; font-size: 11px; border: none; border-radius: 4px; background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; cursor: pointer;">Download</button>
+                    </div>
+                </div>
+
+                <!-- My Selections Panel -->
+                <div class="control-section collapsible">
+                    <div class="section-header" onclick="toggleSection(this)">
+                        <h3>My Selections</h3>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="section-content" style="max-height: 400px; overflow-y: auto;">
+                        <div id="my-selections-list">
+                            <div style="color: #888; font-size: 12px; text-align: center; padding: 20px;">No materials selected yet.<br>Star materials to add them here.</div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <!-- Presets Section -->
             <div class="control-section">
@@ -183,7 +221,10 @@
                 <div class="section-content">
                     <div class="adjustment-group">
                         <label>Scale: <span id="scale-value">150%</span></label>
-                        <input type="range" id="scale-slider" min="10" max="1000" value="150">
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="range" id="scale-slider" min="10" max="1000" value="150" style="flex: 1;">
+                            <button id="sync-scale-btn" class="small-btn" title="Apply this scale to all areas" style="padding: 4px 8px; font-size: 11px; white-space: nowrap;">Sync All</button>
+                        </div>
                     </div>
                     <div class="adjustment-group">
                         <label>Rotation: <span id="rotation-value">0°</span></label>
@@ -454,50 +495,194 @@
                 <canvas id="drawing-canvas" width="1600" height="960"></canvas>
                 <div id="message" class="message">Click to start drawing an area</div>
                 
-                <!-- Floating Drawing Tools Palette -->
+                <!-- Floating Drawing Tools Palette - Enhanced -->
 <div id="drawing-tools-palette" class="drawing-tools-palette hidden">
     <div class="tools-header">
-        <span>Tools</span>
+        <span>Drawing Tools</span>
         <button id="close-tools-btn" class="close-tools-btn">×</button>
     </div>
-    <div class="tools-grid">
-        <button class="tool-btn active" data-tool="pointer" title="Pointer">
-            <span class="tool-icon">↖</span>
-        </button>
-        <button class="tool-btn" data-tool="pen" title="Pen">
-            <span class="tool-icon">✏️</span>
-        </button>
-        <button class="tool-btn" data-tool="line" title="Line">
-            <span class="tool-icon">📏</span>
-        </button>
-        <button class="tool-btn" data-tool="arrow" title="Arrow">
-            <span class="tool-icon">↗</span>
-        </button>
-        <button class="tool-btn" data-tool="circle" title="Circle">
-            <span class="tool-icon">⭕</span>
-        </button>
-        <button class="tool-btn" data-tool="rectangle" title="Rectangle">
-            <span class="tool-icon">⬜</span>
-        </button>
-        <button class="tool-btn" data-tool="text" title="Text">
-            <span class="tool-icon">T</span>
-        </button>
+
+    <!-- Main Tools Grid -->
+    <div class="tools-section">
+        <div class="tools-section-label">Tools</div>
+        <div class="tools-grid">
+            <button class="tool-btn active" data-tool="pointer" title="Pointer (V)">
+                <span class="tool-icon">↖</span>
+            </button>
+            <button class="tool-btn" data-tool="pen" title="Pen/Brush (B)">
+                <span class="tool-icon">✏️</span>
+            </button>
+            <button class="tool-btn" data-tool="eraser" title="Eraser (E)">
+                <span class="tool-icon">🧹</span>
+            </button>
+            <button class="tool-btn" data-tool="eraser-brush" title="Brush Eraser - Erase parts of strokes">
+                <span class="tool-icon">🩹</span>
+            </button>
+            <button class="tool-btn" data-tool="fill" title="Paint Bucket (G)">
+                <span class="tool-icon">🪣</span>
+            </button>
+            <button class="tool-btn" data-tool="line" title="Line (L)">
+                <span class="tool-icon">📏</span>
+            </button>
+            <button class="tool-btn" data-tool="arrow" title="Arrow (A)">
+                <span class="tool-icon">↗</span>
+            </button>
+            <button class="tool-btn" data-tool="text" title="Text (T)">
+                <span class="tool-icon">T</span>
+            </button>
+            <button class="tool-btn" data-tool="blur" title="Blur Tool">
+                <span class="tool-icon">💧</span>
+            </button>
+        </div>
     </div>
-    <div class="tools-controls">
-        <div class="color-picker">
-            <input type="color" id="drawing-color" value="#ff0000">
-            <label for="drawing-color">Color</label>
+
+    <!-- Shapes Section -->
+    <div class="tools-section">
+        <div class="tools-section-label">Shapes</div>
+        <div class="tools-grid shapes-grid">
+            <button class="tool-btn" data-tool="rectangle" title="Rectangle (U)">
+                <span class="tool-icon">⬜</span>
+            </button>
+            <button class="tool-btn" data-tool="circle" title="Circle (O)">
+                <span class="tool-icon">⭕</span>
+            </button>
+            <button class="tool-btn" data-tool="triangle" title="Triangle">
+                <span class="tool-icon">△</span>
+            </button>
+            <button class="tool-btn" data-tool="star" title="Star">
+                <span class="tool-icon">⭐</span>
+            </button>
+            <button class="tool-btn" data-tool="polygon" title="Polygon">
+                <span class="tool-icon">⬡</span>
+            </button>
+            <button class="tool-btn" data-tool="diamond" title="Diamond">
+                <span class="tool-icon">◇</span>
+            </button>
         </div>
-        <div class="stroke-width">
-            <input type="range" id="stroke-width" min="0.5" max="40" value="2" step="0.5">
-            <label for="stroke-width">Width</label>
+        <div class="shape-options">
+            <label>
+                <input type="checkbox" id="shape-fill-toggle"> Fill Shape
+            </label>
+            <label>
+                Sides: <input type="number" id="polygon-sides" min="3" max="12" value="6" style="width: 50px;">
+            </label>
         </div>
-        <div class="font-size-control">
-            <input type="range" id="font-size" min="10" max="48" value="16">
-            <label for="font-size">Font Size</label>
+    </div>
+
+    <!-- Brush Presets -->
+    <div class="tools-section">
+        <div class="tools-section-label">Brush Size Presets</div>
+        <div class="brush-presets">
+            <button class="brush-preset" data-size="2" title="Fine">●</button>
+            <button class="brush-preset" data-size="5" title="Small">●</button>
+            <button class="brush-preset active" data-size="10" title="Medium">●</button>
+            <button class="brush-preset" data-size="20" title="Large">●</button>
+            <button class="brush-preset" data-size="40" title="Extra Large">●</button>
         </div>
-        <button id="clear-drawings-btn" class="clear-drawings-btn">Clear All</button>
-        <button id="delete-selected-btn" class="delete-selected-btn">Delete Selected</button>
+    </div>
+
+    <!-- Controls Section -->
+    <div class="tools-section">
+        <div class="tools-section-label">Settings</div>
+        <div class="tools-controls">
+            <div class="control-row">
+                <label for="drawing-color">Color</label>
+                <input type="color" id="drawing-color" value="#ff0000">
+            </div>
+            <div class="control-row">
+                <label for="stroke-width">Size: <span id="stroke-width-value">2</span>px</label>
+                <input type="range" id="stroke-width" min="0.5" max="80" value="2" step="0.5">
+            </div>
+            <div class="control-row">
+                <label for="drawing-opacity">Opacity: <span id="opacity-value">100</span>%</label>
+                <input type="range" id="drawing-opacity" min="0" max="100" value="100" step="1">
+            </div>
+            <div class="control-row">
+                <label for="brush-hardness">Hardness: <span id="hardness-value">100</span>%</label>
+                <input type="range" id="brush-hardness" min="0" max="100" value="100" step="1">
+            </div>
+            <div class="control-row font-size-control">
+                <label for="font-size">Font Size: <span id="font-size-value">16</span>px</label>
+                <input type="range" id="font-size" min="10" max="72" value="16">
+            </div>
+        </div>
+    </div>
+
+    <!-- Layers Panel -->
+    <div class="tools-section layers-section">
+        <div class="tools-section-label">
+            Layers
+            <div class="layer-actions">
+                <button id="add-layer-btn" class="layer-action-btn" title="Add Layer">+</button>
+                <button id="delete-layer-btn" class="layer-action-btn" title="Delete Layer">🗑</button>
+                <button id="duplicate-layer-btn" class="layer-action-btn" title="Duplicate Layer">⧉</button>
+            </div>
+        </div>
+        <div id="layers-list" class="layers-list">
+            <div class="layer-item active" data-layer="1">
+                <span class="layer-visibility">👁</span>
+                <span class="layer-name">Drawings</span>
+                <span class="layer-lock">🔓</span>
+            </div>
+            <div class="layer-item" data-layer="0">
+                <span class="layer-visibility">👁</span>
+                <span class="layer-name">Canvas (House)</span>
+                <span class="layer-lock">🔒</span>
+            </div>
+        </div>
+        <div class="layer-blend-options">
+            <label for="layer-opacity">Layer Opacity: <span id="layer-opacity-value">100</span>%</label>
+            <input type="range" id="layer-opacity" min="0" max="100" value="100">
+            <label for="blend-mode">Blend Mode:</label>
+            <select id="blend-mode">
+                <option value="source-over">Normal</option>
+                <option value="multiply">Multiply</option>
+                <option value="screen">Screen</option>
+                <option value="overlay">Overlay</option>
+                <option value="darken">Darken</option>
+                <option value="lighten">Lighten</option>
+                <option value="color-dodge">Color Dodge</option>
+                <option value="color-burn">Color Burn</option>
+                <option value="hard-light">Hard Light</option>
+                <option value="soft-light">Soft Light</option>
+                <option value="difference">Difference</option>
+                <option value="exclusion">Exclusion</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Image Adjustments -->
+    <div class="tools-section">
+        <div class="tools-section-label">Adjustments</div>
+        <div class="adjustments-panel">
+            <div class="adjustment-row">
+                <label for="adj-brightness">Brightness: <span id="brightness-value">0</span></label>
+                <input type="range" id="adj-brightness" min="-100" max="100" value="0">
+            </div>
+            <div class="adjustment-row">
+                <label for="adj-contrast">Contrast: <span id="contrast-value">0</span></label>
+                <input type="range" id="adj-contrast" min="-100" max="100" value="0">
+            </div>
+            <div class="adjustment-row">
+                <label for="adj-blur">Blur: <span id="blur-value">0</span></label>
+                <input type="range" id="adj-blur" min="0" max="20" value="0">
+            </div>
+            <div class="adjustment-row">
+                <label for="adj-sharpen">Sharpen: <span id="sharpen-value">0</span></label>
+                <input type="range" id="adj-sharpen" min="0" max="100" value="0">
+            </div>
+            <button id="apply-adjustments-btn" class="apply-btn">Apply to Selection</button>
+            <button id="reset-adjustments-btn" class="reset-btn">Reset</button>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="tools-section">
+        <div class="tools-action-buttons">
+            <button id="clear-drawings-btn" class="clear-drawings-btn">Clear All</button>
+            <button id="delete-selected-btn" class="delete-selected-btn">Delete Selected</button>
+            <button id="flatten-layers-btn" class="flatten-btn">Flatten Layers</button>
+        </div>
     </div>
 </div>
             </div>
@@ -1000,6 +1185,8 @@
                 <option value="endicott">Endicott</option>
                 <option value="dutch-quality-thin-brick">Dutch Quality</option>
                 <option value="king-klinker">King Klinker</option>
+                <option value="metrobrick">Metrobrick</option>
+                <option value="rocky-mountain-stoneworks-thin-brick">Rocky Mountain Stoneworks</option>
             </select>
         </div>
     </div>
@@ -1172,6 +1359,38 @@
         <div class="material-grid-container">
             <div class="material-grid" id="interstate-brick-all-grid">
                 <!-- All Interstate thin bricks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrobrick View -->
+    <div id="metrobrick-view" class="manufacturer-view">
+        <div class="profile-selector">
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-profile="all">All Colors</button>
+            </div>
+        </div>
+        <div class="material-grid-container">
+            <div class="material-grid" id="metrobrick-all-grid">
+                <!-- All Metrobrick thin bricks will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Rocky Mountain Stoneworks Thin Brick View -->
+    <div id="rocky-mountain-stoneworks-thin-brick-view" class="manufacturer-view">
+        <div class="profile-selector">
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-profile="all">All Colors</button>
+                <button class="profile-tab" data-profile="wirecut">Wirecut</button>
+            </div>
+        </div>
+        <div class="material-grid-container">
+            <div class="material-grid" id="rms-thin-brick-all-grid">
+                <!-- All RMS thin bricks will be populated by JavaScript -->
+            </div>
+            <div class="profile-group" id="rms-thin-brick-wirecut-grid" data-profile="wirecut">
+                <!-- Wirecut bricks will be populated by JavaScript -->
             </div>
         </div>
     </div>
