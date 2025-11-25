@@ -424,6 +424,427 @@ let currentBrickRowPoints = [];
 let currentBrickColor = 'red3';
 let currentBrickTexture = 'smooth';
 let currentBrickMortarColor = '#696969';
+
+// --- 4-Point Quad Distortion State ---
+let isDrawingQuadDistortion = false;
+let currentQuadPoints = [];
+let isDraggingQuadCorner = false;
+let draggingQuadCornerIndex = -1;
+
+// --- Perspective Transform Functions ---
+// Bilinear interpolation for 4-point perspective distortion
+function bilinearInterpolate(p0, p1, p2, p3, u, v) {
+    // p0: top-left, p1: top-right, p2: bottom-right, p3: bottom-left
+    // u: horizontal parameter (0-1), v: vertical parameter (0-1)
+    const x = (1 - u) * (1 - v) * p0.x + u * (1 - v) * p1.x + u * v * p2.x + (1 - u) * v * p3.x;
+    const y = (1 - u) * (1 - v) * p0.y + u * (1 - v) * p1.y + u * v * p2.y + (1 - u) * v * p3.y;
+    return { x, y };
+}
+
+// Helper: Check if point is inside quadrilateral
+function isPointInQuad(x, y, quad) {
+    // Use cross product to check if point is on same side of all edges
+    function sign(p1, p2, p3) {
+        return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+    }
+
+    const d1 = sign({x, y}, quad[0], quad[1]);
+    const d2 = sign({x, y}, quad[1], quad[2]);
+    const d3 = sign({x, y}, quad[2], quad[3]);
+    const d4 = sign({x, y}, quad[3], quad[0]);
+
+    const hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0) || (d4 < 0);
+    const hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0) || (d4 > 0);
+
+    return !(hasNeg && hasPos);
+}
+
+// Helper: Inverse map point from quad to source rectangle using bilinear inverse
+function inversePointInQuad(px, py, quad, srcW, srcH) {
+    // Bilinear inverse mapping - iterate to find u,v
+    let u = 0.5, v = 0.5;
+    const iterations = 15;
+
+    for (let iter = 0; iter < iterations; iter++) {
+        const p00 = quad[0], p10 = quad[1], p11 = quad[2], p01 = quad[3];
+
+        const x = (1-u)*(1-v)*p00.x + u*(1-v)*p10.x + u*v*p11.x + (1-u)*v*p01.x;
+        const y = (1-u)*(1-v)*p00.y + u*(1-v)*p10.y + u*v*p11.y + (1-u)*v*p01.y;
+
+        const dx = px - x;
+        const dy = py - y;
+
+        if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) break;
+
+        // Compute Jacobian
+        const dxdu = -(1-v)*p00.x + (1-v)*p10.x + v*p11.x - v*p01.x;
+        const dxdv = -(1-u)*p00.x - u*p10.x + u*p11.x + (1-u)*p01.x;
+        const dydu = -(1-v)*p00.y + (1-v)*p10.y + v*p11.y - v*p01.y;
+        const dydv = -(1-u)*p00.y - u*p10.y + u*p11.y + (1-u)*p01.y;
+
+        const det = dxdu * dydv - dxdv * dydu;
+        if (Math.abs(det) < 0.0001) break;
+
+        const du = (dx * dydv - dy * dxdv) / det;
+        const dv = (dy * dxdu - dx * dydu) / det;
+
+        u += du * 0.5;
+        v += dv * 0.5;
+
+        u = Math.max(0, Math.min(1, u));
+        v = Math.max(0, Math.min(1, v));
+    }
+
+    return {x: u * srcW, y: v * srcH};
+}
+
+// Apply perspective distortion to a material image
+function applyPerspectiveDistortion(ctx, quadPoints, area) {
+    if (!quadPoints || quadPoints.length !== 4) {
+        console.log('Invalid quad points for distortion');
+        return false;
+    }
+
+    console.log('Applying perspective distortion to area with quad points:', quadPoints);
+
+    // Get area bounds to determine source rectangle size
+    const bounds = getAreaBounds(area.points);
+    const srcWidth = Math.ceil(bounds.width);
+    const srcHeight = Math.ceil(bounds.height);
+
+    if (srcWidth <= 0 || srcHeight <= 0) {
+        console.error('Invalid source dimensions');
+        return false;
+    }
+
+    console.log('Source dimensions:', srcWidth, 'x', srcHeight);
+
+    // Check if we already have captured material
+    let materialImageData;
+    if (area.quadDistortion && area.quadDistortion.capturedMaterial) {
+        // Use the pre-captured material
+        console.log('Using pre-captured material from quadDistortion');
+        materialImageData = area.quadDistortion.capturedMaterial;
+    } else {
+        // Need to render the material to a temp canvas
+        console.log('Rendering material to temp canvas');
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = srcWidth;
+        tempCanvas.height = srcHeight;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        // Render the material pattern within the temp canvas
+        tempCtx.save();
+
+        // Create clipping path for the area shape, translated to origin
+        tempCtx.beginPath();
+        tempCtx.moveTo(area.points[0].x - bounds.minX, area.points[0].y - bounds.minY);
+        for (let i = 1; i < area.points.length; i++) {
+            tempCtx.lineTo(area.points[i].x - bounds.minX, area.points[i].y - bounds.minY);
+        }
+        tempCtx.closePath();
+        tempCtx.clip();
+
+        // Get the texture mode
+        const textureMode = area.textureMode || TEXTURE_MODE;
+
+        if (textureMode === 'color_fill') {
+            // Simple color fill
+            tempCtx.globalAlpha = area.fillOpacity || currentFillOpacity;
+            tempCtx.fillStyle = area.fillColor || currentFillColor;
+            tempCtx.fill();
+            tempCtx.globalAlpha = 1.0;
+        } else if (textureMode === 'brick' || !textureMode) {
+            // For brick and stone patterns, we need to swap the global ctx temporarily
+            const originalCtx = ctx;
+            ctx = tempCtx;
+
+            // Translate to offset the rendering
+            const offsetX = -bounds.minX;
+            const offsetY = -bounds.minY;
+            ctx.translate(offsetX, offsetY);
+
+            if (textureMode === 'brick') {
+                drawBrickPattern(area);
+            } else {
+                drawStonePattern(area, textureMode);
+            }
+
+            ctx.translate(-offsetX, -offsetY);
+
+            // Restore original ctx
+            ctx = originalCtx;
+        }
+
+        tempCtx.restore();
+
+        console.log('Rendered undistorted material to temp canvas');
+
+        // Now capture the material from the temp canvas
+        materialImageData = tempCtx.getImageData(0, 0, srcWidth, srcHeight);
+    }
+
+    const materialData = materialImageData.data;
+    console.log('Got material data:', srcWidth, 'x', srcHeight);
+
+    // Create destination canvas for distorted result
+    const destCanvas = document.createElement('canvas');
+    destCanvas.width = canvas.width;
+    destCanvas.height = canvas.height;
+    const destCtx = destCanvas.getContext('2d');
+    const destImageData = destCtx.createImageData(canvas.width, canvas.height);
+    const destData = destImageData.data;
+
+    // Find bounds of destination quad
+    const minX = Math.floor(Math.min(quadPoints[0].x, quadPoints[1].x, quadPoints[2].x, quadPoints[3].x));
+    const maxX = Math.ceil(Math.max(quadPoints[0].x, quadPoints[1].x, quadPoints[2].x, quadPoints[3].x));
+    const minY = Math.floor(Math.min(quadPoints[0].y, quadPoints[1].y, quadPoints[2].y, quadPoints[3].y));
+    const maxY = Math.ceil(Math.max(quadPoints[0].y, quadPoints[1].y, quadPoints[2].y, quadPoints[3].y));
+
+    console.log('Destination quad bounds:', minX, minY, maxX, maxY);
+
+    // Perform reverse mapping: for each dest pixel, find source pixel
+    for (let dy = Math.max(0, minY); dy <= Math.min(canvas.height - 1, maxY); dy++) {
+        for (let dx = Math.max(0, minX); dx <= Math.min(canvas.width - 1, maxX); dx++) {
+            // Check if point is inside quad
+            if (!isPointInQuad(dx, dy, quadPoints)) continue;
+
+            // Map destination point back to source using inverse bilinear interpolation
+            const srcPt = inversePointInQuad(dx, dy, quadPoints, srcWidth, srcHeight);
+            if (!srcPt) continue;
+
+            const sx = Math.floor(srcPt.x);
+            const sy = Math.floor(srcPt.y);
+
+            if (sx >= 0 && sx < srcWidth && sy >= 0 && sy < srcHeight) {
+                const srcIndex = (sy * srcWidth + sx) * 4;
+                const destIndex = (dy * canvas.width + dx) * 4;
+
+                destData[destIndex] = materialData[srcIndex];
+                destData[destIndex + 1] = materialData[srcIndex + 1];
+                destData[destIndex + 2] = materialData[srcIndex + 2];
+                destData[destIndex + 3] = materialData[srcIndex + 3];
+            }
+        }
+    }
+
+    destCtx.putImageData(destImageData, 0, 0);
+
+    // Cache the distorted canvas (only if not temporary)
+    if (!area.quadDistortion.isTemporary) {
+        area.quadDistortion.cachedCanvas = destCanvas;
+        console.log('Cached distorted canvas');
+    }
+
+    // Draw the distorted result with clipping to quad
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(quadPoints[0].x, quadPoints[0].y);
+    for (let i = 1; i < quadPoints.length; i++) {
+        ctx.lineTo(quadPoints[i].x, quadPoints[i].y);
+    }
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.drawImage(destCanvas, 0, 0);
+    ctx.restore();
+
+    console.log('Distortion applied successfully');
+    return true;
+}
+
+// Draw quad distortion control points
+function drawQuadDistortionControls(ctx) {
+    console.log('drawQuadDistortionControls called - isDrawingQuadDistortion:', isDrawingQuadDistortion, 'currentQuadPoints.length:', currentQuadPoints.length);
+    if (!isDrawingQuadDistortion || currentQuadPoints.length === 0) return;
+
+    console.log('Drawing quad controls with points:', currentQuadPoints);
+    ctx.save();
+
+    // Draw lines connecting points
+    if (currentQuadPoints.length > 1) {
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(currentQuadPoints[0].x, currentQuadPoints[0].y);
+        for (let i = 1; i < currentQuadPoints.length; i++) {
+            ctx.lineTo(currentQuadPoints[i].x, currentQuadPoints[i].y);
+        }
+        if (currentQuadPoints.length === 4) {
+            ctx.closePath();
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Draw corner points
+    currentQuadPoints.forEach((point, index) => {
+        // Outer circle
+        ctx.fillStyle = '#3498db';
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner circle
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Label
+        ctx.fillStyle = '#3498db';
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText((index + 1).toString(), point.x + 12, point.y - 8);
+    });
+
+    // Instructions
+    if (currentQuadPoints.length < 4) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(10, 10, 400, 40);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '14px Arial';
+        ctx.fillText(`Click point ${currentQuadPoints.length + 1} of 4 on area with material`, 20, 35);
+    } else {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(10, 10, 500, 40);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '14px Arial';
+        ctx.fillText('Drag corners to distort in real-time. Press Enter when done.', 20, 35);
+    }
+
+    ctx.restore();
+}
+
+// Check if click is near a quad corner
+function getQuadCornerAtPoint(x, y, threshold = 10) {
+    for (let i = 0; i < currentQuadPoints.length; i++) {
+        const point = currentQuadPoints[i];
+        const dist = Math.hypot(x - point.x, y - point.y);
+        if (dist <= threshold) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Apply quad distortion in real-time (for live dragging)
+function applyQuadDistortionRealtime() {
+    if (currentQuadPoints.length !== 4) return;
+
+    // Find the area under the quad center
+    const centerX = (currentQuadPoints[0].x + currentQuadPoints[1].x + currentQuadPoints[2].x + currentQuadPoints[3].x) / 4;
+    const centerY = (currentQuadPoints[0].y + currentQuadPoints[1].y + currentQuadPoints[2].y + currentQuadPoints[3].y) / 4;
+
+    let targetArea = null;
+    if (selectedAreaIndex !== -1 && areas[selectedAreaIndex]) {
+        targetArea = areas[selectedAreaIndex];
+    } else {
+        for (let i = areas.length - 1; i >= 0; i--) {
+            if (areas[i] && !areas[i].isCutout && isPointInPolygon({x: centerX, y: centerY}, areas[i].points)) {
+                targetArea = areas[i];
+                break;
+            }
+        }
+    }
+
+    if (!targetArea) return;
+
+    // Check if we already have captured material (from previous call)
+    let capturedMaterial = null;
+    if (targetArea.quadDistortion && targetArea.quadDistortion.capturedMaterial) {
+        // Reuse the existing captured material
+        capturedMaterial = targetArea.quadDistortion.capturedMaterial;
+        console.log('Reusing existing captured material');
+    } else {
+        // CAPTURE THE ALREADY-RENDERED MATERIAL FROM CANVAS BEFORE ENABLING DISTORTION
+        // This ensures we have the material to distort
+        const bounds = getAreaBounds(targetArea.points);
+        const srcWidth = Math.ceil(bounds.width);
+        const srcHeight = Math.ceil(bounds.height);
+
+        // Capture the current state from the main canvas
+        capturedMaterial = ctx.getImageData(
+            Math.floor(bounds.minX),
+            Math.floor(bounds.minY),
+            srcWidth,
+            srcHeight
+        );
+        console.log('Captured new material from canvas');
+    }
+
+    // NOW store/update the quad distortion with the captured material
+    targetArea.quadDistortion = {
+        points: [...currentQuadPoints],
+        enabled: true,
+        isTemporary: true, // Mark as temporary so we know it's being adjusted
+        capturedMaterial: capturedMaterial // Store the captured material (either new or reused)
+    };
+
+    // Invalidate cache so it renders fresh
+    if (targetArea.quadDistortion.cachedCanvas) {
+        delete targetArea.quadDistortion.cachedCanvas;
+    }
+}
+
+// Apply quad distortion to selected area (finalize)
+async function applyQuadDistortion() {
+    if (currentQuadPoints.length !== 4) {
+        showMessage('Please set all 4 corner points first.');
+        return;
+    }
+
+    // Check if there's an area that contains these points or find the area under the quad
+    let targetArea = null;
+    if (selectedAreaIndex !== -1 && areas[selectedAreaIndex]) {
+        targetArea = areas[selectedAreaIndex];
+    } else {
+        // Find area that contains the center of the quad
+        const centerX = (currentQuadPoints[0].x + currentQuadPoints[1].x + currentQuadPoints[2].x + currentQuadPoints[3].x) / 4;
+        const centerY = (currentQuadPoints[0].y + currentQuadPoints[1].y + currentQuadPoints[2].y + currentQuadPoints[3].y) / 4;
+
+        for (let i = areas.length - 1; i >= 0; i--) {
+            if (areas[i] && !areas[i].isCutout && isPointInPolygon({x: centerX, y: centerY}, areas[i].points)) {
+                targetArea = areas[i];
+                selectedAreaIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (!targetArea) {
+        showMessage('No area selected. Please draw or select an area first, or ensure the quad is over an existing area.');
+        return;
+    }
+
+    // Check if area has any material assigned
+    const hasMaterial = targetArea.stone || targetArea.material ||
+                       (targetArea.textureMode === 'color_fill') ||
+                       (targetArea.textureMode === 'brick');
+
+    if (!hasMaterial) {
+        showMessage('Selected area has no material. Please assign a material to the area first.');
+        return;
+    }
+
+    saveState();
+
+    // Store the quad distortion with the area (finalized)
+    targetArea.quadDistortion = {
+        points: [...currentQuadPoints],
+        enabled: true,
+        isTemporary: false
+    };
+
+    // Reset quad distortion mode
+    isDrawingQuadDistortion = false;
+    currentQuadPoints = [];
+    clearAllActiveButtons();
+
+    showMessage('Perspective distortion applied! Area will now render with distortion.');
+    drawCanvas();
+}
+
 // Color fill mode variables
 let currentFillColor = '#A0A0A0';
 let currentFillOpacity = 1.0;
@@ -1671,6 +2092,11 @@ const FULL_BRICK_MATERIALS = [
       area.materialType = 'full-brick';
       area.pattern = (window.currentBrickPattern || 'running');
       area.mortarColor = (window.currentBrickMortarColor || '#696969');
+
+      // Invalidate cached distortion when material changes
+      if (area.quadDistortion && area.quadDistortion.cachedCanvas) {
+        delete area.quadDistortion.cachedCanvas;
+      }
 
       // Legacy keys other parts may read
       area.stoneUrl = mat.url;
@@ -7371,7 +7797,12 @@ if (selectedAreaIndex !== -1 && areas[selectedAreaIndex] && !areas[selectedAreaI
     areasToUpdate.forEach(areaIndex => {
         const area = areas[areaIndex];
         area.stone = currentStone;
-        
+
+        // Invalidate cached distortion when material changes
+        if (area.quadDistortion && area.quadDistortion.cachedCanvas) {
+            delete area.quadDistortion.cachedCanvas;
+        }
+
         // Set appropriate texture mode based on type
         if (type === 'full-brick' || type === 'thin-brick') {
             area.textureMode = 'stone_linear';
@@ -7850,6 +8281,9 @@ if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint && l
         console.log('>>> Labels are OFF');
     }
 
+    // Draw quad distortion controls
+    drawQuadDistortionControls(ctx);
+
     // Draw Material Selector button overlays on top of everything
     if (isMaterialSelectorMode) {
         drawMaterialSelectorOverlays();
@@ -7860,12 +8294,53 @@ if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint && l
 // New function to handle stone areas with proper cutout masking
 function drawStoneInAreaWithCutouts(area, isSelected) {
     if (!area || !area.points || area.points.length < 3) return;
-    
+
+    // Check if this area has quad distortion enabled
+    if (area.quadDistortion && area.quadDistortion.enabled) {
+        // FIRST: Render the normal material to the ENTIRE original area
+        // This ensures the area outside the quad still shows the material
+        drawStoneInAreaWithCutoutsHelper(ctx, area, isSelected);
+
+        // THEN: Render the distorted material OVER the quad region
+        // If it's temporary (being dragged), always regenerate - don't use cache
+        if (area.quadDistortion.isTemporary) {
+            applyPerspectiveDistortion(ctx, area.quadDistortion.points, area);
+        } else {
+            // Use cached distorted canvas if available
+            if (area.quadDistortion.cachedCanvas) {
+                ctx.save();
+                // Create clipping path from quad points
+                ctx.beginPath();
+                ctx.moveTo(area.quadDistortion.points[0].x, area.quadDistortion.points[0].y);
+                for (let i = 1; i < area.quadDistortion.points.length; i++) {
+                    ctx.lineTo(area.quadDistortion.points[i].x, area.quadDistortion.points[i].y);
+                }
+                ctx.closePath();
+                ctx.clip();
+                // Draw the cached distorted canvas
+                ctx.drawImage(area.quadDistortion.cachedCanvas, 0, 0);
+                ctx.restore();
+            } else {
+                // Generate distorted canvas once and cache it
+                applyPerspectiveDistortion(ctx, area.quadDistortion.points, area);
+            }
+        }
+        return; // Done rendering both normal and distorted
+    }
+
+    // Call helper for normal rendering
+    drawStoneInAreaWithCutoutsHelper(ctx, area, isSelected);
+}
+
+// Helper function that does the actual rendering (without distortion)
+function drawStoneInAreaWithCutoutsHelper(ctx, area, isSelected) {
+    if (!area || !area.points || area.points.length < 3) return;
+
     // Find all cutouts that belong to this area
-    const cutouts = areas.filter(cutoutArea => 
+    const cutouts = areas.filter(cutoutArea =>
         cutoutArea && cutoutArea.isCutout && cutoutArea.parentId === area.id
     );
-    
+
     ctx.save();
     
     // Create the main area path
@@ -10362,17 +10837,19 @@ if (drawingToolsBtn) {
     if (addAreaBtn) {
         addAreaBtn.addEventListener('click', function() {
             clearAllActiveButtons();
-            isDrawingArea = true; 
+            isDrawingArea = true;
             isSubtractMode = false;
             isDrawingDepthEdge = false;
             isDrawingSill = false;
             isDrawingBrickRow = false;
             isAddingDecoration = false;
+            isDrawingQuadDistortion = false; // Clear quad distortion mode
             isInDrawingMode = true;
-            selectedDepthEdgeIndex = -1; 
+            selectedDepthEdgeIndex = -1;
             selectedSillIndex = -1;
             selectedBrickRowIndex = -1;
             selectedDecorationIndex = -1;
+            currentQuadPoints = []; // Clear quad points
             updateDepthList();
             updateSillsList();
             updateBrickRowsList();
@@ -10492,16 +10969,16 @@ rectangleStartPoint = null;
             isDrawingBrickRow = false;
             isAddingDecoration = false;
             isInDrawingMode = true;
-            selectedAreaIndex = -1; 
-            selectedDepthEdgeIndex = -1; 
+            selectedAreaIndex = -1;
+            selectedDepthEdgeIndex = -1;
             selectedSillIndex = -1;
             selectedBrickRowIndex = -1;
             selectedDecorationIndex = -1;
-            updateAreasList(); 
+            updateAreasList();
             updateSillsList();
             updateBrickRowsList();
             updateDecorationsList();
-            disableMainAreaControls(); 
+            disableMainAreaControls();
 
             currentDepthEdgePoints = [];
             showMessage('Click to draw depth area points. Double-click or ESC to finish.');
@@ -10509,7 +10986,74 @@ rectangleStartPoint = null;
             drawCanvas();
         });
     }
-  
+
+    // 4-Point Perspective Distortion Tool
+    const quadDistortionBtn = document.getElementById('quad-distortion-btn');
+    if (quadDistortionBtn) {
+        let isProcessing = false; // Flag to prevent re-entrance
+
+        quadDistortionBtn.addEventListener('click', function(e) {
+            // Use stopImmediatePropagation to prevent ANY other handlers
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            // Prevent re-entrance
+            if (isProcessing) {
+                console.log('Already processing click, ignoring...');
+                return;
+            }
+            isProcessing = true;
+
+            console.log('4-Point button clicked');
+            console.log('Current isDrawingQuadDistortion state:', isDrawingQuadDistortion);
+            console.log('Button currently has active class:', this.classList.contains('active'));
+
+            // Toggle based on button active state, not the variable
+            // This prevents race conditions with clearAllActiveButtons
+            const wasActive = this.classList.contains('active');
+
+            if (wasActive) {
+                // Turn off quad distortion mode
+                console.log('Turning OFF quad distortion mode');
+                isDrawingQuadDistortion = false;
+                isInDrawingMode = false;
+                currentQuadPoints = [];
+                this.classList.remove('active');
+                showMessage('Quad distortion mode cancelled.');
+                drawCanvas();
+            } else {
+                // Turn on quad distortion mode
+                console.log('Turning ON quad distortion mode');
+                clearAllActiveButtons();
+                isDrawingArea = false;
+                isSubtractMode = false;
+                isDrawingDepthEdge = false;
+                isDrawingSill = false;
+                isDrawingBrickRow = false;
+                isAddingDecoration = false;
+                isInDrawingMode = true;
+                isDrawingQuadDistortion = true;
+                selectedAreaIndex = -1;
+                selectedDepthEdgeIndex = -1;
+                selectedSillIndex = -1;
+                selectedBrickRowIndex = -1;
+                selectedDecorationIndex = -1;
+                currentQuadPoints = [];
+                this.classList.add('active');
+                showMessage('Click 4 corners over an area with material to define distortion. Drag corners to adjust. Press Enter when done.');
+                drawCanvas();
+            }
+
+            console.log('After toggle - isDrawingQuadDistortion:', isDrawingQuadDistortion);
+            console.log('After toggle - button has active class:', this.classList.contains('active'));
+
+            // Reset processing flag after a short delay
+            setTimeout(() => {
+                isProcessing = false;
+            }, 100);
+        });
+    }
+
     // FIXED - Clear button to clear all drawings too
     if (clearBtn) {
         clearBtn.addEventListener('click', function() {
@@ -13252,17 +13796,48 @@ if (!foundElement) {
 
     // Mouse down for potential dragging and decoration resizing - FIXED
     canvas.addEventListener('mousedown', function(e) {
-       
-        
+        console.log('MOUSEDOWN EVENT FIRED');
+
         const coords = getCanvasCoordinates(e);
 const x = coords.x;
 const y = coords.y;
+        console.log('Mouse coordinates:', x, y, 'isDrawingQuadDistortion:', isDrawingQuadDistortion);
       // Handle rectangle drawing start
 if (isDrawingArea && areaDrawingMode === 'rectangle' && !rectangleStartPoint) {
     rectangleStartPoint = { x, y };
     return;
-}  
-      
+}
+
+        // Handle 4-point quad distortion
+        if (isDrawingQuadDistortion) {
+            console.log('Quad distortion mode active, clicked at:', x, y);
+            // Check if clicking on existing corner to drag
+            const cornerIndex = getQuadCornerAtPoint(x, y);
+            console.log('Corner index:', cornerIndex);
+            if (cornerIndex !== -1) {
+                isDraggingQuadCorner = true;
+                draggingQuadCornerIndex = cornerIndex;
+                canvas.style.cursor = 'move';
+                console.log('Starting to drag corner', cornerIndex);
+                return;
+            }
+
+            // Add new point if less than 4 points
+            if (currentQuadPoints.length < 4) {
+                currentQuadPoints.push({ x, y });
+                console.log('Added point', currentQuadPoints.length, ':', { x, y });
+
+                // If we just placed the 4th point, apply distortion in real-time
+                if (currentQuadPoints.length === 4) {
+                    applyQuadDistortionRealtime();
+                    showMessage('4 points set! Drag corners to adjust distortion. Press Enter when done.');
+                }
+
+                drawCanvas();
+                return;
+            }
+        }
+
         // Check for decoration resizing FIRST - FIXED
         if (selectedDecorationIndex !== -1 && decorations[selectedDecorationIndex]) {
             const decoration = decorations[selectedDecorationIndex];
@@ -13602,6 +14177,29 @@ const y = coords.y;
 
         lastMousePosition = { x, y };
 
+        // Handle quad corner dragging
+        if (isDraggingQuadCorner && draggingQuadCornerIndex !== -1) {
+            currentQuadPoints[draggingQuadCornerIndex] = { x, y };
+
+            // Apply distortion in real-time if we have 4 points and a target area
+            if (currentQuadPoints.length === 4) {
+                applyQuadDistortionRealtime();
+            }
+
+            drawCanvas();
+            return;
+        }
+
+        // Update cursor when hovering over quad corners
+        if (isDrawingQuadDistortion && currentQuadPoints.length > 0) {
+            const cornerIndex = getQuadCornerAtPoint(x, y);
+            if (cornerIndex !== -1) {
+                canvas.style.cursor = 'move';
+            } else {
+                canvas.style.cursor = 'crosshair';
+            }
+        }
+
         // Check for button/panel hover in material selector mode
         if (isMaterialSelectorMode) {
             let newHoverState = { panelIndex: -1, buttonType: null, buttonIndex: -1 };
@@ -13855,6 +14453,15 @@ function updatePerspectiveSliders(area) {
 
     // Mouse up to end dragging and resizing - FIXED
     canvas.addEventListener('mouseup', function(e) {
+        // Handle quad corner dragging stop
+        if (isDraggingQuadCorner) {
+            isDraggingQuadCorner = false;
+            draggingQuadCornerIndex = -1;
+            canvas.style.cursor = 'crosshair';
+            drawCanvas();
+            return;
+        }
+
       // Handle rectangle drawing preview
 // Handle rectangle drawing completion
 if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint) {
@@ -13909,6 +14516,12 @@ const y = coords.y;
     });
 
     document.addEventListener('keydown', function(e) {
+        // Handle Enter key for applying quad distortion
+        if (e.key === 'Enter' && isDrawingQuadDistortion && currentQuadPoints.length === 4) {
+            applyQuadDistortion();
+            return;
+        }
+
         if (e.key === 'Escape') {
             if (isDragging) {
                 isDragging = false;
