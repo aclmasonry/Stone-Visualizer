@@ -27,9 +27,13 @@
                 <span class="toolbar-icon">▨</span>
                 <span class="toolbar-label">Depth Area</span>
             </button>
-    
+            <button id="quad-distortion-btn" class="toolbar-btn" title="4-Point Perspective Distortion">
+                <span class="toolbar-icon">⬡</span>
+                <span class="toolbar-label">4-Point</span>
+            </button>
+
         </div>
-        
+
         <div class="toolbar-divider"></div>
         
         <div class="toolbar-section">
@@ -127,8 +131,7 @@
                 <h3>House Selection</h3>
                 <div class="house-selection">
                     <select id="house-select" class="house-dropdown">
-            <option value="material-selector" selected>Material Selector</option>
-            <option value="./Images/Canvas Images/Accent Room.jpg">Accent Room</option>
+            <option value="./Images/Canvas Images/Accent Room.jpg" selected>Accent Room</option>
             <option value="./Images/Canvas Images/Brick Wall Interior.jpg">Brick Wall Interior</option>
             <option value="./Images/Canvas Images/Canvas-house-1.jpg">Canvas House 1</option>
             <option value="./Images/Canvas Images/Featured-Panel-Wall.svg">Featured Panel Wall (6 Options)</option>
@@ -152,8 +155,8 @@
                 </div>
                 <input type="file" id="house-upload" accept="image/*" style="display: none;">
 
-                <!-- Material Selector Controls -->
-                <div id="panel-grid-controls" class="panel-grid-controls" style="display: block; margin-top: 15px; padding: 12px; background: #2a2a2a; border-radius: 6px; border: 1px solid #404040;">
+                <!-- Material Selector Controls - Hidden (Material Selector is now at selector.html) -->
+                <div id="panel-grid-controls" class="panel-grid-controls" style="display: none; margin-top: 15px; padding: 12px; background: #2a2a2a; border-radius: 6px; border: 1px solid #404040;">
                     <h4 style="margin: 0 0 10px 0; color: #3498db; font-size: 13px;">Material Selector</h4>
                     <p style="font-size: 11px; color: #888; margin: 0 0 10px 0;">Click on any material below to add it to the canvas. Click ★ on canvas to add to favorites.</p>
                     <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap;">
@@ -163,8 +166,8 @@
                     </div>
                 </div>
 
-                <!-- My Selections Panel -->
-                <div class="control-section collapsible">
+                <!-- My Selections Panel - Hidden (Material Selector is now at selector.html) -->
+                <div class="control-section collapsible" id="my-selections-section" style="display: none;">
                     <div class="section-header" onclick="toggleSection(this)">
                         <h3>My Selections</h3>
                         <span class="toggle-icon">▼</span>
