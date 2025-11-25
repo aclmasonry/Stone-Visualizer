@@ -498,169 +498,129 @@ function inversePointInQuad(px, py, quad, srcW, srcH) {
     return {x: u * srcW, y: v * srcH};
 }
 
-// NEW: Fast vertical texture slicing for perspective distortion
-// This uses GPU-accelerated drawImage instead of slow pixel manipulation
+// Faster vertical texture slicing for perspective distortion
 function drawTexturePerspective(ctx, img, points) {
     // points array order: [TopLeft, TopRight, BottomRight, BottomLeft]
-    const p0 = points[0]; // Top Left
-    const p1 = points[1]; // Top Right
-    const p2 = points[2]; // Bottom Right
-    const p3 = points[3]; // Bottom Left
+    const p0 = points[0]; // TL
+    const p1 = points[1]; // TR
+    const p2 = points[2]; // BR
+    const p3 = points[3]; // BL
 
-    // How many slices to draw (more = smoother, less = faster)
-    // 100 is usually a good balance for walls
-    const slices = 100;
-
+    // Increase slices for smoother texturing (200 is a good balance)
+    const slices = 200; 
     const imgWidth = img.width;
     const imgHeight = img.height;
     const step = imgWidth / slices;
 
     for (let i = 0; i < slices; i++) {
-        // The X position in the source image (0 to width)
         const u = i / slices;
         const u_next = (i + 1) / slices;
 
-        // Source slice (a thin vertical strip of the texture)
+        // Source slice (x, y, w, h)
         const sx = i * step;
-        const sw = step;
+        const sw = step; 
 
-        // Destination: Interpolate X and Y coordinates for top and bottom edges
-        // Top edge interpolation (p0 to p1)
+        // Destination interpolation
+        // Top edge (p0 -> p1)
         const tx1 = p0.x + (p1.x - p0.x) * u;
         const ty1 = p0.y + (p1.y - p0.y) * u;
-
         const tx2 = p0.x + (p1.x - p0.x) * u_next;
-        const ty2 = p0.y + (p1.y - p0.y) * u_next;
-
-        // Bottom edge interpolation (p3 to p2)
+        
+        // Bottom edge (p3 -> p2)
         const bx1 = p3.x + (p2.x - p3.x) * u;
         const by1 = p3.y + (p2.y - p3.y) * u;
 
-        const bx2 = p3.x + (p2.x - p3.x) * u_next;
-        const by2 = p3.y + (p2.y - p3.y) * u_next;
-
-        // Calculate the height of this specific slice
+        // Calculated Slice dimensions
         const sliceY = ty1;
         const sliceHeight = by1 - ty1;
+        const sliceX = tx1;
+        // Add 0.5px overlap to prevent vertical gap lines between slices
+        const sliceWidth = (tx2 - tx1) + 0.5; 
 
-        // To prevent gaps due to rounding, we draw slightly wider
-        const sliceWidth = (tx2 - tx1) + 1;
-
-        // Draw the slice using GPU-accelerated drawImage
-        ctx.drawImage(
-            img,
-            sx, 0, sw, imgHeight, // Source x,y,w,h
-            tx1, sliceY, sliceWidth, sliceHeight // Dest x,y,w,h
-        );
+        // Draw the slice
+        if (sliceWidth > 0 && sliceHeight > 0) {
+            ctx.drawImage(
+                img, 
+                sx, 0, sw, imgHeight, // Source
+                sliceX, sliceY, sliceWidth, sliceHeight // Destination
+            );
+        }
     }
 }
 
-// Apply perspective distortion to a material image
-function applyPerspectiveDistortion(ctx, quadPoints, area) {
-    if (!quadPoints || quadPoints.length !== 4) {
-        console.log('Invalid quad points for distortion');
-        return false;
-    }
+function applyPerspectiveDistortion(targetCtx, quadPoints, area) {
+    if (!quadPoints || quadPoints.length !== 4) return false;
 
-    console.log('Applying perspective distortion to area with quad points:', quadPoints);
-
-    // Get area bounds to determine source rectangle size
+    // 1. Calculate dimensions
+    // We add a buffer to the size to prevent edges from getting cut off
     const bounds = getAreaBounds(area.points);
-    const srcWidth = Math.ceil(bounds.width);
-    const srcHeight = Math.ceil(bounds.height);
+    const padding = 0; 
+    const srcWidth = Math.ceil(bounds.width + padding * 2);
+    const srcHeight = Math.ceil(bounds.height + padding * 2);
 
-    if (srcWidth <= 0 || srcHeight <= 0) {
-        console.error('Invalid source dimensions');
-        return false;
-    }
+    if (srcWidth <= 0 || srcHeight <= 0) return false;
 
-    console.log('Source dimensions:', srcWidth, 'x', srcHeight);
+    // 2. Generate the Texture Canvas (if not cached)
+    let materialCanvas = area.quadDistortion?.capturedCanvas;
 
-    // Create temp canvas to render the undistorted material
-    let materialCanvas;
-    if (area.quadDistortion && area.quadDistortion.capturedCanvas) {
-        // Reuse cached material canvas
-        materialCanvas = area.quadDistortion.capturedCanvas;
-        console.log('Using pre-captured material canvas');
-    } else {
-        // Need to render the material to a temp canvas
-        console.log('Rendering material to temp canvas');
+    if (!materialCanvas || (area.quadDistortion && area.quadDistortion.isTemporary)) {
         materialCanvas = document.createElement('canvas');
         materialCanvas.width = srcWidth;
         materialCanvas.height = srcHeight;
         const tempCtx = materialCanvas.getContext('2d');
 
-        // Render the material pattern within the temp canvas
-        tempCtx.save();
+        // -- CONTEXT SWAP START --
+        const originalGlobalCtx = ctx; 
+        ctx = tempCtx; // Hijack global context
 
-        // Create clipping path for the area shape, translated to origin
-        tempCtx.beginPath();
-        tempCtx.moveTo(area.points[0].x - bounds.minX, area.points[0].y - bounds.minY);
-        for (let i = 1; i < area.points.length; i++) {
-            tempCtx.lineTo(area.points[i].x - bounds.minX, area.points[i].y - bounds.minY);
-        }
-        tempCtx.closePath();
-        tempCtx.clip();
+        ctx.save();
+        // Move to 0,0 of the temp canvas
+        ctx.translate(-bounds.minX, -bounds.minY);
 
-        // Get the texture mode
-        const textureMode = area.textureMode || TEXTURE_MODE;
+        // IMPORTANT FIX: We removed the "ctx.clip()" here. 
+        // This allows the brick pattern to fill the whole rectangle, 
+        // so if you drag the points outside the original shape, it still has texture.
+
+        const textureMode = area.textureMode || 'stone_linear';
 
         if (textureMode === 'color_fill') {
-            // Simple color fill
-            tempCtx.globalAlpha = area.fillOpacity || currentFillOpacity;
-            tempCtx.fillStyle = area.fillColor || currentFillColor;
-            tempCtx.fill();
-            tempCtx.globalAlpha = 1.0;
-        } else if (textureMode === 'brick' || !textureMode) {
-            // For brick and stone patterns, we need to swap the global ctx temporarily
-            const originalCtx = ctx;
-            ctx = tempCtx;
-
-            // Translate to offset the rendering
-            const offsetX = -bounds.minX;
-            const offsetY = -bounds.minY;
-            ctx.translate(offsetX, offsetY);
-
-            if (textureMode === 'brick') {
-                drawBrickPattern(area);
-            } else {
-                drawStonePattern(area, textureMode);
-            }
-
-            ctx.translate(-offsetX, -offsetY);
-
-            // Restore original ctx
-            ctx = originalCtx;
+            ctx.fillStyle = area.fillColor || '#A0A0A0';
+            ctx.globalAlpha = area.fillOpacity || 1.0;
+            // Fill the whole bounding box
+            ctx.fillRect(bounds.minX, bounds.minY, bounds.width, bounds.height);
+        } else if (textureMode === 'brick') {
+            // Force draw the brick pattern
+            drawBrickPattern(area); 
+        } else {
+            drawStonePattern(area, textureMode);
         }
 
-        tempCtx.restore();
+        ctx.restore();
+        ctx = originalGlobalCtx; 
+        // -- CONTEXT SWAP END --
 
-        // Cache the material canvas for reuse
-        if (area.quadDistortion) {
+        // Cache the result if we are done dragging
+        if (area.quadDistortion && !area.quadDistortion.isTemporary) {
             area.quadDistortion.capturedCanvas = materialCanvas;
         }
-
-        console.log('Rendered undistorted material to temp canvas');
     }
 
-    // Apply clipping to quad region
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(quadPoints[0].x, quadPoints[0].y);
-    for (let i = 1; i < quadPoints.length; i++) {
-        ctx.lineTo(quadPoints[i].x, quadPoints[i].y);
-    }
-    ctx.closePath();
-    ctx.clip();
+    // 3. Draw the result
+    targetCtx.save();
 
-    // Use fast vertical slicing to render distorted texture
-    console.log('About to call drawTexturePerspective with materialCanvas:', materialCanvas.width, 'x', materialCanvas.height);
-    console.log('Quad points for distortion:', quadPoints);
-    drawTexturePerspective(ctx, materialCanvas, quadPoints);
+    // Clip to the 4-point Quad to keep edges clean
+    targetCtx.beginPath();
+    targetCtx.moveTo(quadPoints[0].x, quadPoints[0].y); 
+    targetCtx.lineTo(quadPoints[1].x, quadPoints[1].y); 
+    targetCtx.lineTo(quadPoints[2].x, quadPoints[2].y); 
+    targetCtx.lineTo(quadPoints[3].x, quadPoints[3].y); 
+    targetCtx.closePath();
+    targetCtx.clip();
 
-    ctx.restore();
+    // Use the optimized slicer
+    drawTexturePerspective(targetCtx, materialCanvas, quadPoints);
 
-    console.log('Distortion applied successfully');
+    targetCtx.restore();
     return true;
 }
 
@@ -8311,64 +8271,48 @@ if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint && l
 }
 
 
-// New function to handle stone areas with proper cutout masking
+// Function to handle stone areas with distortion layered ON TOP of the original
 function drawStoneInAreaWithCutouts(area, isSelected) {
     if (!area || !area.points || area.points.length < 3) return;
 
-    // Check if this area has quad distortion enabled
-    if (area.quadDistortion && area.quadDistortion.enabled && !area.quadDistortion.isTemporary) {
-        console.log('drawStoneInAreaWithCutouts: Area has FINALIZED quadDistortion');
-        console.log('drawStoneInAreaWithCutouts: capturedCanvas exists:', !!area.quadDistortion.capturedCanvas);
-        console.log('drawStoneInAreaWithCutouts: Quad points:', area.quadDistortion.points);
-
-        // When distortion is finalized, render the distorted material in the quad region
-        const distortionApplied = applyPerspectiveDistortion(ctx, area.quadDistortion.points, area);
-        console.log('drawStoneInAreaWithCutouts: Distortion applied result:', distortionApplied);
-
-        // Also draw the quad outline to show where the distortion is
-        ctx.save();
-        ctx.strokeStyle = '#ff6600';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(area.quadDistortion.points[0].x, area.quadDistortion.points[0].y);
-        for (let i = 1; i < area.quadDistortion.points.length; i++) {
-            ctx.lineTo(area.quadDistortion.points[i].x, area.quadDistortion.points[i].y);
-        }
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-
-        // Draw the original area outline (dashed) to show the source region
-        ctx.save();
-        ctx.strokeStyle = isSelected ? '#3498db' : '#666666';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(area.points[0].x, area.points[0].y);
-        for (let i = 1; i < area.points.length; i++) {
-            ctx.lineTo(area.points[i].x, area.points[i].y);
-        }
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-
-        return; // Done rendering finalized distortion
-    } else if (area.quadDistortion && area.quadDistortion.enabled && area.quadDistortion.isTemporary) {
-        console.log('drawStoneInAreaWithCutouts: Area has TEMPORARY quadDistortion (dragging)');
-
-        // During dragging, show both the original material AND the distorted preview
-        drawStoneInAreaWithCutoutsHelper(ctx, area, isSelected);
-
-        // Overlay the distorted preview
-        const distortionApplied = applyPerspectiveDistortion(ctx, area.quadDistortion.points, area);
-        console.log('drawStoneInAreaWithCutouts: Temporary distortion applied:', distortionApplied);
-
-        return; // Done rendering temporary distortion
-    }
-
-    // Call helper for normal rendering
+    // 1. ALWAYS draw the original flat area first.
+    // This ensures the "rest of the wall" never disappears.
     drawStoneInAreaWithCutoutsHelper(ctx, area, isSelected);
+
+    // 2. Check if Quad Distortion is Active
+    if (area.quadDistortion && area.quadDistortion.enabled) {
+        
+        // 3. Draw the distorted texture layer ON TOP
+        applyPerspectiveDistortion(ctx, area.quadDistortion.points, area);
+
+        // 4. Draw the Orange UI Box (only if selecting or editing)
+        if (area.quadDistortion.isTemporary || isSelected) {
+            ctx.save();
+            ctx.strokeStyle = '#ff6600';
+            ctx.lineWidth = 2;
+            // Dashed line if currently dragging, solid if just selected
+            ctx.setLineDash(area.quadDistortion.isTemporary ? [5, 5] : []);
+            
+            const qp = area.quadDistortion.points;
+            ctx.beginPath();
+            ctx.moveTo(qp[0].x, qp[0].y);
+            for (let i = 1; i < qp.length; i++) {
+                ctx.lineTo(qp[i].x, qp[i].y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            
+            // Draw corner handles
+            ctx.fillStyle = '#ff6600';
+            for (let i = 0; i < qp.length; i++) {
+                ctx.beginPath();
+                ctx.arc(qp[i].x, qp[i].y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+        }
+    }
 }
 
 // Helper function that does the actual rendering (without distortion)
