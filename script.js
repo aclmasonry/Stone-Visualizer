@@ -527,25 +527,32 @@ function drawTexturePerspective(ctx, img, points) {
     const subdivisionsX = subdivisions;
     const subdivisionsY = subdivisions;
 
-    // 3. Calculate Perspective Ratio (R)
-    // For brick walls, perspective shows as height OR width difference
-    // We use whichever indicates more distortion
+    // 3. Calculate Perspective Ratio (Tall / Short)
+    // Using Left/Right assumes standard perspective (Tall=Near, Short=Far).
+    // If Ratio > 1: Far end (Right) gets compressed.
+    // If Ratio < 1: Far end (Left) gets compressed.
     const safeLeftH = Math.max(leftHeight, 1);
     const safeRightH = Math.max(rightHeight, 1);
-    const safeTopW = Math.max(topWidth, 1);
-    const safeBottomW = Math.max(bottomWidth, 1);
 
-    const perspectiveHeightRatio = Math.min(safeLeftH, safeRightH) / Math.max(safeLeftH, safeRightH);
-    const perspectiveWidthRatio = Math.min(safeTopW, safeBottomW) / Math.max(safeTopW, safeBottomW);
+    // USER RECOMMENDATION FIX: Use Left/Right (Tall/Short) to get Ratio > 1
+    // This drives the Non-Linear Texture mapping below.
+    const perspectiveRatio = safeLeftH / safeRightH;
 
-    // Use whichever ratio is smaller (indicates more distortion)
-    const rawPerspectiveRatio = Math.min(perspectiveHeightRatio, perspectiveWidthRatio);
+    // Create a tiled texture canvas to avoid wrapping issues
+    const horizontalScale = 3.0;
+    const tiledCanvas = document.createElement('canvas');
+    const tiledCtx = tiledCanvas.getContext('2d');
+    const tilesNeeded = 10; // Create enough tiles to cover the entire span
+    tiledCanvas.width = img.width * tilesNeeded;
+    tiledCanvas.height = img.height;
 
-    // Apply strength control
-    const perspectiveStrength = 1.0;
+    // Draw texture tiles
+    for (let i = 0; i < tilesNeeded; i++) {
+        tiledCtx.drawImage(img, i * img.width, 0);
+    }
 
-    // Blend between no correction (1.0) and full correction (rawPerspectiveRatio)
-    const perspectiveRatio = 1.0 + (rawPerspectiveRatio - 1.0) * perspectiveStrength;
+    // Use the tiled canvas as the source
+    const tiledImg = tiledCanvas;
 
     for (let row = 0; row < subdivisionsY; row++) {
         for (let col = 0; col < subdivisionsX; col++) {
@@ -560,10 +567,14 @@ function drawTexturePerspective(ctx, img, points) {
             // --- TEXTURE COORDINATES (Projective / Non-Linear) ---
             // We map the linear screen step to a non-linear texture position
             // Formula: t = s / (R + (1-R)*s)
-            // With R < 1, this samples MORE texture at the far end (compressed bricks)
+            // With R > 1, this samples MORE texture at the far end (compressed bricks)
 
-            const u_tex = u_screen / (perspectiveRatio + (1 - perspectiveRatio) * u_screen);
-            const u_tex_next = u_screen_next / (perspectiveRatio + (1 - perspectiveRatio) * u_screen_next);
+            const u_tex_base = u_screen / (perspectiveRatio + (1 - perspectiveRatio) * u_screen);
+            const u_tex_next_base = u_screen_next / (perspectiveRatio + (1 - perspectiveRatio) * u_screen_next);
+
+            // Scale for tiled texture (no modulo needed, tiled canvas handles it)
+            const u_tex = u_tex_base * horizontalScale;
+            const u_tex_next = u_tex_next_base * horizontalScale;
 
             const v_tex = v_screen; // Keep vertical linear for wall segments
             const v_tex_next = v_screen_next;
@@ -587,10 +598,15 @@ function drawTexturePerspective(ctx, img, points) {
                 y: (1 - v_screen_next) * ((1 - u_screen) * p0.y + u_screen * p1.y) + v_screen_next * ((1 - u_screen) * p3.y + u_screen * p2.y)
             };
 
-            // Calculate source rectangle from the image (using the Linear texture coords)
-            const sx = u_tex * img.width;
+            // Calculate source rectangle from the tiled texture
+            // Clamp coordinates to stay within tiled canvas bounds
+            const maxU = (tiledImg.width / img.width) - 0.01; // Leave small margin
+            const clampedSx = Math.min(u_tex, maxU) * img.width;
+            const clampedSxNext = Math.min(u_tex_next, maxU) * img.width;
+
+            const sx = clampedSx;
             const sy = v_tex * img.height;
-            const sw = (u_tex_next - u_tex) * img.width;
+            const sw = clampedSxNext - clampedSx;
             const sh = (v_tex_next - v_tex) * img.height;
 
             // Draw this quad cell
@@ -622,9 +638,9 @@ function drawTexturePerspective(ctx, img, points) {
                 topLeft.x, topLeft.y
             );
 
-            // Draw with slight overlap to prevent seams
-            const overlap = 1.0;
-            ctx.drawImage(img,
+            // Draw with overlap to prevent seams and transparency
+            const overlap = 2.0;
+            ctx.drawImage(tiledImg,
                 sx, sy, sw, sh,
                 -overlap, -overlap, sw + overlap * 2, sh + overlap * 2
             );
