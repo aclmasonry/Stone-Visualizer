@@ -322,6 +322,7 @@ let customMortarColor = '#696969'; // Default custom mortar color
 let previousHouseValue = null; // Track previous house for saving
 let showMaterialLabels = false; // Toggle for showing material labels on areas
 let labelPosition = 'center'; // Position of labels: center, top, bottom, top-left, top-right, bottom-left, bottom-right
+let isEditingExistingQuad = false; // Track if we are editing a saved distortion
 
 // Material Selector - materials shown on canvas for comparison
 let canvasMaterials = []; // Array of {url, name, manufacturer, isFavorite}
@@ -498,127 +499,352 @@ function inversePointInQuad(px, py, quad, srcW, srcH) {
     return {x: u * srcW, y: v * srcH};
 }
 
-// Faster vertical texture slicing for perspective distortion
+// Advanced Perspective Slicing with Foreshortening Correction
 function drawTexturePerspective(ctx, img, points) {
-    // points array order: [TopLeft, TopRight, BottomRight, BottomLeft]
-    const p0 = points[0]; // TL
-    const p1 = points[1]; // TR
-    const p2 = points[2]; // BR
-    const p3 = points[3]; // BL
+    // points: [TopLeft, TopRight, BottomRight, BottomLeft]
+    const p0 = points[0];
+    const p1 = points[1];
+    const p2 = points[2];
+    const p3 = points[3];
 
-    // Increase slices for smoother texturing (200 is a good balance)
-    const slices = 200; 
-    const imgWidth = img.width;
-    const imgHeight = img.height;
-    const step = imgWidth / slices;
+    // Calculate quad distortion to determine subdivision density
+    // Measure how much the quad deviates from a rectangle
+    const topWidth = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+    const bottomWidth = Math.hypot(p2.x - p3.x, p2.y - p3.y);
+    const leftHeight = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+    const rightHeight = Math.hypot(p2.x - p1.x, p2.y - p1.y);
 
-    for (let i = 0; i < slices; i++) {
-        const u = i / slices;
-        const u_next = (i + 1) / slices;
+    // Calculate distortion factors
+    const widthRatio = Math.max(topWidth, bottomWidth) / Math.min(topWidth, bottomWidth);
+    const heightRatio = Math.max(leftHeight, rightHeight) / Math.min(leftHeight, rightHeight);
+    const maxDistortion = Math.max(widthRatio, heightRatio);
 
-        // Source slice (x, y, w, h)
-        const sx = i * step;
-        const sw = step; 
+    // Increase subdivisions based on distortion (more distortion = more subdivisions)
+    // Base: 80, increases up to 200 for extreme distortion
+    const baseSub = 80;
+    const maxSub = 200;
+    const distortionFactor = Math.min((maxDistortion - 1) * 2, 1); // 0 to 1
+    const subdivisions = Math.round(baseSub + (maxSub - baseSub) * distortionFactor);
 
-        // Destination interpolation
-        // Top edge (p0 -> p1)
-        const tx1 = p0.x + (p1.x - p0.x) * u;
-        const ty1 = p0.y + (p1.y - p0.y) * u;
-        const tx2 = p0.x + (p1.x - p0.x) * u_next;
-        
-        // Bottom edge (p3 -> p2)
-        const bx1 = p3.x + (p2.x - p3.x) * u;
-        const by1 = p3.y + (p2.y - p3.y) * u;
+    const subdivisionsX = subdivisions;
+    const subdivisionsY = subdivisions;
 
-        // Calculated Slice dimensions
-        const sliceY = ty1;
-        const sliceHeight = by1 - ty1;
-        const sliceX = tx1;
-        // Add 0.5px overlap to prevent vertical gap lines between slices
-        const sliceWidth = (tx2 - tx1) + 0.5; 
+    // Perspective-correct texture mapping for horizontal dimension only
+    // Using inverse depth interpolation (1/w interpolation)
+    const perspectiveStrength = 1.0; // Full correction
 
-        // Draw the slice
-        if (sliceWidth > 0 && sliceHeight > 0) {
-            ctx.drawImage(
-                img, 
-                sx, 0, sw, imgHeight, // Source
-                sliceX, sliceY, sliceWidth, sliceHeight // Destination
+    // Assign depth values based on which edge is wider (closer = depth 1, farther = depth > 1)
+    const maxWidth = Math.max(topWidth, bottomWidth);
+    const minWidth = Math.min(topWidth, bottomWidth);
+    const depthRatio = maxWidth / minWidth; // How much farther is the narrow edge?
+
+    // Determine which edge is closer
+    let topDepth, bottomDepth;
+    if (topWidth > bottomWidth) {
+        // Top is closer (wider)
+        topDepth = 1.0;
+        bottomDepth = depthRatio;
+    } else {
+        // Bottom is closer (wider)
+        topDepth = depthRatio;
+        bottomDepth = 1.0;
+    }
+
+    for (let row = 0; row < subdivisionsY; row++) {
+        for (let col = 0; col < subdivisionsX; col++) {
+            // SIMPLE LINEAR MAPPING - No perspective correction for now
+            // This establishes the baseline
+            const u_screen = col / subdivisionsX;
+            const u_screen_next = (col + 1) / subdivisionsX;
+            const v_screen = row / subdivisionsY;
+            const v_screen_next = (row + 1) / subdivisionsY;
+
+            // Texture coordinates match screen coordinates
+            const u_tex = u_screen;
+            const u_tex_next = u_screen_next;
+            const v_tex = v_screen;
+            const v_tex_next = v_screen_next;
+
+            // Bilinear interpolation for screen positions using perspective-corrected coordinates
+            const topLeft = {
+                x: (1 - v_screen) * ((1 - u_screen) * p0.x + u_screen * p1.x) + v_screen * ((1 - u_screen) * p3.x + u_screen * p2.x),
+                y: (1 - v_screen) * ((1 - u_screen) * p0.y + u_screen * p1.y) + v_screen * ((1 - u_screen) * p3.y + u_screen * p2.y)
+            };
+            const topRight = {
+                x: (1 - v_screen) * ((1 - u_screen_next) * p0.x + u_screen_next * p1.x) + v_screen * ((1 - u_screen_next) * p3.x + u_screen_next * p2.x),
+                y: (1 - v_screen) * ((1 - u_screen_next) * p0.y + u_screen_next * p1.y) + v_screen * ((1 - u_screen_next) * p3.y + u_screen_next * p2.y)
+            };
+            const bottomRight = {
+                x: (1 - v_screen_next) * ((1 - u_screen_next) * p0.x + u_screen_next * p1.x) + v_screen_next * ((1 - u_screen_next) * p3.x + u_screen_next * p2.x),
+                y: (1 - v_screen_next) * ((1 - u_screen_next) * p0.y + u_screen_next * p1.y) + v_screen_next * ((1 - u_screen_next) * p3.y + u_screen_next * p2.y)
+            };
+            const bottomLeft = {
+                x: (1 - v_screen_next) * ((1 - u_screen) * p0.x + u_screen * p1.x) + v_screen_next * ((1 - u_screen) * p3.x + u_screen * p2.x),
+                y: (1 - v_screen_next) * ((1 - u_screen) * p0.y + u_screen * p1.y) + v_screen_next * ((1 - u_screen) * p3.y + u_screen * p2.y)
+            };
+
+            // Map texture coordinates directly to pixels (uniform distribution)
+            const sx = u_tex * img.width;
+            const sy = v_tex * img.height;
+            const sw = (u_tex_next - u_tex) * img.width;
+            const sh = (v_tex_next - v_tex) * img.height;
+
+            // Draw this quad cell using transform
+            ctx.save();
+            ctx.globalAlpha = 1.0; // Force full opacity
+            ctx.globalCompositeOperation = 'source-over'; // Normal blending
+
+            // Keep image smoothing enabled for quality
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            ctx.beginPath();
+            ctx.moveTo(topLeft.x, topLeft.y);
+            ctx.lineTo(topRight.x, topRight.y);
+            ctx.lineTo(bottomRight.x, bottomRight.y);
+            ctx.lineTo(bottomLeft.x, bottomLeft.y);
+            ctx.closePath();
+            ctx.clip();
+
+            // Calculate transform matrix for this quad cell
+            const dx1 = topRight.x - topLeft.x;
+            const dy1 = topRight.y - topLeft.y;
+            const dx2 = bottomLeft.x - topLeft.x;
+            const dy2 = bottomLeft.y - topLeft.y;
+
+            ctx.transform(
+                dx1 / sw, dy1 / sw,
+                dx2 / sh, dy2 / sh,
+                topLeft.x, topLeft.y
             );
+
+            // Draw with significant overlap to prevent gaps - critical for extreme angles
+            const overlap = 1.5;
+            ctx.drawImage(img, sx - overlap, sy - overlap, sw + overlap * 2, sh + overlap * 2,
+                         -overlap, -overlap, sw + overlap * 2, sh + overlap * 2);
+            ctx.restore();
         }
     }
+}
+
+// Forward perspective transform: converts a point from original space to quad space using bilinear interpolation
+function forwardPerspectiveTransform(point, quadPoints, originalPoints) {
+    if (!quadPoints || quadPoints.length !== 4 || !originalPoints || originalPoints.length < 3) {
+        return point;
+    }
+
+    // Get bounds of original area
+    const bounds = getAreaBounds(originalPoints);
+
+    // Calculate normalized position in original space (0 to 1)
+    const u = (point.x - bounds.minX) / (bounds.width || 1);
+    const v = (point.y - bounds.minY) / (bounds.height || 1);
+
+    // Bilinear interpolation using the 4 quad corners
+    // quadPoints order: [top-left, top-right, bottom-right, bottom-left]
+    const qp = quadPoints;
+
+    // Interpolate top edge (between points 0 and 1)
+    const topX = qp[0].x + u * (qp[1].x - qp[0].x);
+    const topY = qp[0].y + u * (qp[1].y - qp[0].y);
+
+    // Interpolate bottom edge (between points 3 and 2)
+    const bottomX = qp[3].x + u * (qp[2].x - qp[3].x);
+    const bottomY = qp[3].y + u * (qp[2].y - qp[3].y);
+
+    // Interpolate between top and bottom
+    const finalX = topX + v * (bottomX - topX);
+    const finalY = topY + v * (bottomY - topY);
+
+    return { x: finalX, y: finalY };
+}
+
+// Inverse perspective transform: converts a point from quad space back to original space
+// This uses iterative approximation since there's no closed-form inverse for bilinear interpolation
+function inversePerspectiveTransform(point, quadPoints, originalPoints) {
+    if (!quadPoints || quadPoints.length !== 4 || !originalPoints || originalPoints.length < 3) {
+        return point;
+    }
+
+    // Get bounds of original area
+    const bounds = getAreaBounds(originalPoints);
+
+    // Use Newton-Raphson iteration to find u,v that maps to the point
+    let u = 0.5, v = 0.5; // Start with center
+    const qp = quadPoints;
+
+    for (let iter = 0; iter < 10; iter++) {
+        // Calculate current position using forward transform
+        const topX = qp[0].x + u * (qp[1].x - qp[0].x);
+        const topY = qp[0].y + u * (qp[1].y - qp[0].y);
+        const bottomX = qp[3].x + u * (qp[2].x - qp[3].x);
+        const bottomY = qp[3].y + u * (qp[2].y - qp[3].y);
+        const currentX = topX + v * (bottomX - topX);
+        const currentY = topY + v * (bottomY - topY);
+
+        // Calculate error
+        const errorX = point.x - currentX;
+        const errorY = point.y - currentY;
+
+        if (Math.abs(errorX) < 0.01 && Math.abs(errorY) < 0.01) break;
+
+        // Calculate partial derivatives (Jacobian)
+        const dXdU = (qp[1].x - qp[0].x) + v * ((qp[2].x - qp[3].x) - (qp[1].x - qp[0].x));
+        const dXdV = bottomX - topX;
+        const dYdU = (qp[1].y - qp[0].y) + v * ((qp[2].y - qp[3].y) - (qp[1].y - qp[0].y));
+        const dYdV = bottomY - topY;
+
+        // Solve 2x2 system using Cramer's rule
+        const det = dXdU * dYdV - dXdV * dYdU;
+        if (Math.abs(det) < 0.0001) break;
+
+        const deltaU = (errorX * dYdV - errorY * dXdV) / det;
+        const deltaV = (dXdU * errorY - dYdU * errorX) / det;
+
+        u += deltaU;
+        v += deltaV;
+
+        // Clamp to valid range
+        u = Math.max(0, Math.min(1, u));
+        v = Math.max(0, Math.min(1, v));
+    }
+
+    // Map back to original space
+    const origX = bounds.minX + u * bounds.width;
+    const origY = bounds.minY + v * bounds.height;
+
+    return { x: origX, y: origY };
 }
 
 function applyPerspectiveDistortion(targetCtx, quadPoints, area) {
     if (!quadPoints || quadPoints.length !== 4) return false;
 
-    // 1. Calculate dimensions
-    // We add a buffer to the size to prevent edges from getting cut off
-    const bounds = getAreaBounds(area.points);
-    const padding = 0; 
+    // Use the ORIGINAL points for texture generation, not the distorted quad points
+    // This keeps the texture consistent even when dragging quad corners
+    const sourcePoints = area.quadDistortion?.originalPoints || area.points;
+    const bounds = getAreaBounds(sourcePoints);
+
+    // Add padding to prevent texture clipping at edges
+    const padding = 2;
     const srcWidth = Math.ceil(bounds.width + padding * 2);
     const srcHeight = Math.ceil(bounds.height + padding * 2);
 
     if (srcWidth <= 0 || srcHeight <= 0) return false;
 
-    // 2. Generate the Texture Canvas (if not cached)
-    let materialCanvas = area.quadDistortion?.capturedCanvas;
+    // GENERATE TEXTURE CANVAS
+    // If we are dragging (isTemporary) OR Editing (isEditingExistingQuad), we must NOT use the cache.
+    // We need to regenerate the texture mapping to match the new points.
+    let useCache = true;
+    if (area.quadDistortion && (area.quadDistortion.isTemporary || isEditingExistingQuad)) {
+        useCache = false;
+    }
 
-    if (!materialCanvas || (area.quadDistortion && area.quadDistortion.isTemporary)) {
+    let materialCanvas = useCache ? area.quadDistortion?.capturedCanvas : null;
+
+    if (!materialCanvas) {
         materialCanvas = document.createElement('canvas');
         materialCanvas.width = srcWidth;
         materialCanvas.height = srcHeight;
         const tempCtx = materialCanvas.getContext('2d');
 
         // -- CONTEXT SWAP START --
-        const originalGlobalCtx = ctx; 
-        ctx = tempCtx; // Hijack global context
+        const originalGlobalCtx = ctx;
+        ctx = tempCtx;
 
         ctx.save();
-        // Move to 0,0 of the temp canvas
-        ctx.translate(-bounds.minX, -bounds.minY);
-
-        // IMPORTANT FIX: We removed the "ctx.clip()" here. 
-        // This allows the brick pattern to fill the whole rectangle, 
-        // so if you drag the points outside the original shape, it still has texture.
+        ctx.translate(-bounds.minX + padding, -bounds.minY + padding);
 
         const textureMode = area.textureMode || 'stone_linear';
+
+        // Create a temporary area object with the ORIGINAL points for texture rendering
+        const tempArea = {...area, points: sourcePoints};
+
+        // APPLY CUTOUTS - Find all cutouts that belong to this area
+        const cutouts = areas.filter(cutoutArea =>
+            cutoutArea && cutoutArea.isCutout && cutoutArea.parentId === area.id
+        );
+
+        console.log('applyPerspectiveDistortion: area.id =', area.id, 'cutouts found =', cutouts.length, cutouts);
+
+        // Create clipping path with cutouts as holes
+        if (cutouts.length > 0) {
+            const region = new Path2D();
+
+            // Add the main area path
+            region.moveTo(sourcePoints[0].x, sourcePoints[0].y);
+            for (let i = 1; i < sourcePoints.length; i++) {
+                region.lineTo(sourcePoints[i].x, sourcePoints[i].y);
+            }
+            region.closePath();
+
+            // Add cutout paths as holes (reverse winding order)
+            cutouts.forEach(cutout => {
+                if (cutout.points && cutout.points.length >= 3) {
+                    // Add cutout in reverse order to create a hole
+                    region.moveTo(cutout.points[0].x, cutout.points[0].y);
+                    for (let i = cutout.points.length - 1; i >= 1; i--) {
+                        region.lineTo(cutout.points[i].x, cutout.points[i].y);
+                    }
+                    region.closePath();
+                }
+            });
+
+            // Apply the clipping mask
+            ctx.clip(region, 'evenodd');
+        } else {
+            // No cutouts, just clip to main area
+            ctx.beginPath();
+            ctx.moveTo(sourcePoints[0].x, sourcePoints[0].y);
+            for (let i = 1; i < sourcePoints.length; i++) {
+                ctx.lineTo(sourcePoints[i].x, sourcePoints[i].y);
+            }
+            ctx.closePath();
+            ctx.clip();
+        }
+
+        // Ensure full opacity for all texture modes
+        ctx.globalAlpha = 1.0;
+        ctx.globalCompositeOperation = 'source-over';
 
         if (textureMode === 'color_fill') {
             ctx.fillStyle = area.fillColor || '#A0A0A0';
             ctx.globalAlpha = area.fillOpacity || 1.0;
-            // Fill the whole bounding box
             ctx.fillRect(bounds.minX, bounds.minY, bounds.width, bounds.height);
         } else if (textureMode === 'brick') {
-            // Force draw the brick pattern
-            drawBrickPattern(area); 
+            drawBrickPattern(tempArea);
         } else {
-            drawStonePattern(area, textureMode);
+            drawStonePattern(tempArea, textureMode);
         }
 
         ctx.restore();
-        ctx = originalGlobalCtx; 
+        ctx = originalGlobalCtx;
         // -- CONTEXT SWAP END --
 
-        // Cache the result if we are done dragging
-        if (area.quadDistortion && !area.quadDistortion.isTemporary) {
+        // Only save cache if we are NOT dragging/editing
+        if (area.quadDistortion && !area.quadDistortion.isTemporary && !isEditingExistingQuad) {
             area.quadDistortion.capturedCanvas = materialCanvas;
         }
     }
 
-    // 3. Draw the result
+    // DRAW RESULT
     targetCtx.save();
-
-    // Clip to the 4-point Quad to keep edges clean
+    targetCtx.globalAlpha = 1.0; // Ensure full opacity
     targetCtx.beginPath();
-    targetCtx.moveTo(quadPoints[0].x, quadPoints[0].y); 
-    targetCtx.lineTo(quadPoints[1].x, quadPoints[1].y); 
-    targetCtx.lineTo(quadPoints[2].x, quadPoints[2].y); 
-    targetCtx.lineTo(quadPoints[3].x, quadPoints[3].y); 
+    targetCtx.moveTo(quadPoints[0].x, quadPoints[0].y);
+    targetCtx.lineTo(quadPoints[1].x, quadPoints[1].y);
+    targetCtx.lineTo(quadPoints[2].x, quadPoints[2].y);
+    targetCtx.lineTo(quadPoints[3].x, quadPoints[3].y);
     targetCtx.closePath();
     targetCtx.clip();
 
-    // Use the optimized slicer
     drawTexturePerspective(targetCtx, materialCanvas, quadPoints);
+
+    // Apply area-specific shadow overlay if set
+    const shadowEffect = (area.shadow || 0) / 100;
+    if (shadowEffect > 0) {
+        targetCtx.fillStyle = `rgba(0, 0, 0, ${shadowEffect * 0.4})`;
+        targetCtx.fill(); // Fill within the clipped quad region
+    }
 
     targetCtx.restore();
     return true;
@@ -711,9 +937,43 @@ function enforceRealism(points) {
     return points;
 }
 
+// Helper to sort 4 points into [TL, TR, BR, BL] order to prevent twisting
+function sortQuadPoints(points) {
+    if (points.length !== 4) return points;
+
+    // Calculate centroid
+    const center = points.reduce((acc, p) => ({x: acc.x + p.x, y: acc.y + p.y}), {x:0, y:0});
+    center.x /= 4;
+    center.y /= 4;
+
+    // Sort by angle from center
+    const sorted = [...points].sort((a, b) => {
+        const angA = Math.atan2(a.y - center.y, a.x - center.x);
+        const angB = Math.atan2(b.y - center.y, b.x - center.x);
+        return angA - angB;
+    });
+
+    // Re-order to: Top-Left, Top-Right, Bottom-Right, Bottom-Left
+    // This ensures the "Z" pattern (0,1,2,3) matches canvas draw order
+    const top = [...points].sort((a, b) => a.y - b.y).slice(0, 2);
+    const bottom = [...points].sort((a, b) => a.y - b.y).slice(2, 4);
+
+    const tl = top.sort((a, b) => a.x - b.x)[0];
+    const tr = top.sort((a, b) => a.x - b.x)[1];
+    const br = bottom.sort((a, b) => a.x - b.x)[1];
+    const bl = bottom.sort((a, b) => a.x - b.x)[0];
+
+    return [tl, tr, br, bl];
+}
+
 // Apply quad distortion in real-time (for live dragging)
 function applyQuadDistortionRealtime() {
     if (currentQuadPoints.length !== 4) return;
+
+    // Sort points immediately so the box never twists or flips
+    const sortedPoints = sortQuadPoints(currentQuadPoints);
+    // Update the global current points to match the sorted order
+    for(let i=0; i<4; i++) currentQuadPoints[i] = sortedPoints[i];
 
     // Find the area under the quad center
     const centerX = (currentQuadPoints[0].x + currentQuadPoints[1].x + currentQuadPoints[2].x + currentQuadPoints[3].x) / 4;
@@ -731,30 +991,16 @@ function applyQuadDistortionRealtime() {
         }
     }
 
-    if (!targetArea) {
-        console.log('applyQuadDistortionRealtime: No target area found');
-        return;
-    }
-
-    console.log('applyQuadDistortionRealtime: Target area found, has material:', !!(targetArea.stone || targetArea.material));
-
-    // Optional: Uncomment to enforce vertical realism (keeps vertical edges straight)
-    // currentQuadPoints = enforceRealism(currentQuadPoints);
+    if (!targetArea) return;
 
     // Store/update the quad distortion settings
     if (!targetArea.quadDistortion) {
         targetArea.quadDistortion = {};
-        console.log('applyQuadDistortionRealtime: Created new quadDistortion object');
     }
 
     targetArea.quadDistortion.points = [...currentQuadPoints];
     targetArea.quadDistortion.enabled = true;
-    targetArea.quadDistortion.isTemporary = true; // Mark as temporary so we know it's being adjusted
-
-    console.log('applyQuadDistortionRealtime: Set distortion points, capturedCanvas exists:', !!targetArea.quadDistortion.capturedCanvas);
-
-    // Note: capturedCanvas will be created on first render in applyPerspectiveDistortion
-    // and reused on subsequent calls for better performance
+    targetArea.quadDistortion.isTemporary = true; 
 }
 
 // Apply quad distortion to selected area (finalize)
@@ -764,64 +1010,73 @@ async function applyQuadDistortion() {
         return;
     }
 
-    // Check if there's an area that contains these points or find the area under the quad
-    let targetArea = null;
-    if (selectedAreaIndex !== -1 && areas[selectedAreaIndex]) {
-        targetArea = areas[selectedAreaIndex];
-    } else {
-        // Find area that contains the center of the quad
-        const centerX = (currentQuadPoints[0].x + currentQuadPoints[1].x + currentQuadPoints[2].x + currentQuadPoints[3].x) / 4;
-        const centerY = (currentQuadPoints[0].y + currentQuadPoints[1].y + currentQuadPoints[2].y + currentQuadPoints[3].y) / 4;
-
-        for (let i = areas.length - 1; i >= 0; i--) {
-            if (areas[i] && !areas[i].isCutout && isPointInPolygon({x: centerX, y: centerY}, areas[i].points)) {
-                targetArea = areas[i];
-                selectedAreaIndex = i;
-                break;
-            }
-        }
-    }
-
-    if (!targetArea) {
-        showMessage('No area selected. Please draw or select an area first, or ensure the quad is over an existing area.');
-        return;
-    }
-
-    // Check if area has any material assigned
-    const hasMaterial = targetArea.stone || targetArea.material ||
-                       (targetArea.textureMode === 'color_fill') ||
-                       (targetArea.textureMode === 'brick');
-
-    if (!hasMaterial) {
-        showMessage('Selected area has no material. Please assign a material to the area first.');
-        return;
-    }
-
     saveState();
 
-    // Preserve the captured canvas from real-time preview if it exists
-    const existingCapturedCanvas = targetArea.quadDistortion?.capturedCanvas;
+    let targetArea = null;
 
-    console.log('applyQuadDistortion: Before finalize - capturedCanvas exists:', !!existingCapturedCanvas);
-    console.log('applyQuadDistortion: Before finalize - quadDistortion:', targetArea.quadDistortion);
+    // Check if applying to existing area
+    if (selectedAreaIndex !== -1 && areas[selectedAreaIndex]) {
+        targetArea = areas[selectedAreaIndex];
 
-    // Store the quad distortion with the area (finalized)
-    targetArea.quadDistortion = {
-        points: [...currentQuadPoints],
-        enabled: true,
-        isTemporary: false,
-        capturedCanvas: existingCapturedCanvas // Preserve the captured material canvas
-    };
+        // Apply quad distortion to existing area
+        targetArea.quadDistortion = {
+            points: JSON.parse(JSON.stringify(currentQuadPoints)),
+            enabled: true,
+            isTemporary: false,
+            capturedCanvas: null
+        };
 
-    console.log('applyQuadDistortion: After finalize - quadDistortion:', targetArea.quadDistortion);
-    console.log('applyQuadDistortion: After finalize - capturedCanvas exists:', !!targetArea.quadDistortion.capturedCanvas);
+        showMessage('Perspective applied to existing area.');
+    } else {
+        // CREATE NEW AREA with quad distortion
+        // Calculate bounding box of quad points to create the rectangle
+        const bounds = {
+            minX: Math.min(currentQuadPoints[0].x, currentQuadPoints[1].x, currentQuadPoints[2].x, currentQuadPoints[3].x),
+            maxX: Math.max(currentQuadPoints[0].x, currentQuadPoints[1].x, currentQuadPoints[2].x, currentQuadPoints[3].x),
+            minY: Math.min(currentQuadPoints[0].y, currentQuadPoints[1].y, currentQuadPoints[2].y, currentQuadPoints[3].y),
+            maxY: Math.max(currentQuadPoints[0].y, currentQuadPoints[1].y, currentQuadPoints[2].y, currentQuadPoints[3].y)
+        };
 
-    // Reset quad distortion mode
+        // Create rectangle points from bounding box
+        const rectanglePoints = [
+            { x: bounds.minX, y: bounds.minY },  // top-left
+            { x: bounds.maxX, y: bounds.minY },  // top-right
+            { x: bounds.maxX, y: bounds.maxY },  // bottom-right
+            { x: bounds.minX, y: bounds.maxY }   // bottom-left
+        ];
+
+        // Create new area with quad distortion
+        const newArea = {
+            id: Date.now(),
+            points: rectanglePoints,
+            stone: null,
+            scale: GLOBAL_STONE_SCALE,
+            rotation: 180,
+            textureMode: TEXTURE_MODE,
+            isCutout: false,
+            quadDistortion: {
+                points: JSON.parse(JSON.stringify(currentQuadPoints)),
+                originalPoints: rectanglePoints,
+                enabled: true,
+                isTemporary: false,
+                capturedCanvas: null
+            }
+        };
+
+        areas.push(newArea);
+        selectedAreaIndex = areas.length - 1;
+        enableMainAreaControls(newArea);
+        updateAreasList();
+
+        showMessage('4-point area created. Select material to apply.');
+    }
+
+    // Reset UI states
     isDrawingQuadDistortion = false;
     currentQuadPoints = [];
+    isInDrawingMode = false;
     clearAllActiveButtons();
 
-    showMessage('Perspective distortion applied! Area will now render with distortion.');
     drawCanvas();
 }
 
@@ -883,11 +1138,13 @@ let isDragging = false;
 let draggedElementType = null; 
 let draggedElementIndex = -1;
 let dragStartX, dragStartY; 
-let dragElementStartPoints = []; 
+let dragElementStartPoints = [];
+let dragQuadStartPoints = []; // Store quad distortion points at start of drag
 let isResizingSill = false;
 let resizingEndpoint = null;
 let isDraggingVertex = false;
 let draggedVertexIndex = -1;
+let draggedVertexStartPos = null; // Store the start position of the vertex being dragged
 let isResizingDepthEdge = false; 
 
 // --- Undo/Redo System ---
@@ -2074,8 +2331,8 @@ const FULL_BRICK_MATERIALS = [
       area.mortarColor = (window.currentBrickMortarColor || '#696969');
 
       // Invalidate cached distortion when material changes
-      if (area.quadDistortion && area.quadDistortion.cachedCanvas) {
-        delete area.quadDistortion.cachedCanvas;
+      if (area.quadDistortion && area.quadDistortion.enabled) {
+        area.quadDistortion.capturedCanvas = null;
       }
 
       // Legacy keys other parts may read
@@ -4264,16 +4521,33 @@ function handleDrawingDoubleClick(e) {
     console.log('=== Double click detected ===');
     console.log('isDrawingToolsActive:', isDrawingToolsActive);
     console.log('currentDrawingTool:', currentDrawingTool);
-    
+
+    // CRITICAL: Finish drawing area/cutout/depth area on double-click
+    if (isDrawingArea && currentPoints.length >= 3) {
+        console.log('Double-click: Finishing drawing area');
+        finishDrawingArea();
+        return;
+    }
+    if (isDrawingAccent && currentAccentPoints.length >= 3) {
+        console.log('Double-click: Finishing flat cap');
+        finishDrawingFlatCap();
+        return;
+    }
+    if (isDrawingDepthEdge && currentDepthEdgePoints && currentDepthEdgePoints.length >= 3) {
+        console.log('Double-click: Finishing depth area');
+        finishDrawingDepthArea();
+        return;
+    }
+
     // Allow double-click editing even if drawing tools aren't technically active
     // as long as we're in pointer mode or have annotations
     if (!isDrawingToolsActive && annotations.length === 0) return;
-    
+
     const coords = getCanvasCoordinates(e);
     const clickedAnnotation = getAnnotationAtPoint(coords.x, coords.y);
-    
+
     console.log('Clicked annotation:', clickedAnnotation);
-    
+
     if (clickedAnnotation !== null && annotations[clickedAnnotation].type === 'text') {
         console.log('Opening text edit modal for annotation:', clickedAnnotation);
         editTextAnnotation(clickedAnnotation);
@@ -7327,6 +7601,16 @@ function pasteElement() {
             x: point.x + 20,
             y: point.y + 20
         }));
+
+        // CRITICAL: Also offset quad distortion points if they exist
+        if (pastedData.quadDistortion && pastedData.quadDistortion.points) {
+            pastedData.quadDistortion.points = pastedData.quadDistortion.points.map(point => ({
+                x: point.x + 20,
+                y: point.y + 20
+            }));
+            // Clear the cached canvas since we're creating a new copy
+            pastedData.quadDistortion.capturedCanvas = null;
+        }
     } else if (pastedData.x !== undefined && pastedData.y !== undefined) {
         // For decorations
         pastedData.x += 20;
@@ -7779,8 +8063,8 @@ if (selectedAreaIndex !== -1 && areas[selectedAreaIndex] && !areas[selectedAreaI
         area.stone = currentStone;
 
         // Invalidate cached distortion when material changes
-        if (area.quadDistortion && area.quadDistortion.cachedCanvas) {
-            delete area.quadDistortion.cachedCanvas;
+        if (area.quadDistortion && area.quadDistortion.enabled) {
+            area.quadDistortion.capturedCanvas = null;
         }
 
         // Set appropriate texture mode based on type
@@ -8050,7 +8334,24 @@ if (currentImage) {
     if (!hideOutlines) {
         areas.forEach((area, index) => {
             if (area && area.points && area.points.length >= 2) {
-                drawAreaOutline(area.points, index === selectedAreaIndex, area.isCutout, area.multiSelected);
+                let displayPoints = area.points;
+
+                // CRITICAL: Transform cutout points to quad space for display
+                if (area.isCutout && area.parentId) {
+                    const parentArea = areas.find(a => a && a.id === area.parentId);
+                    if (parentArea && parentArea.quadDistortion && parentArea.quadDistortion.enabled) {
+                        const quadPoints = parentArea.quadDistortion.points;
+                        const originalPoints = parentArea.quadDistortion.originalPoints || parentArea.points;
+                        displayPoints = area.points.map(point =>
+                            forwardPerspectiveTransform(point, quadPoints, originalPoints)
+                        );
+                    }
+                }
+
+                // CRITICAL: Don't show blue selection outline if area has quad distortion
+                // The orange quad corners are enough visual feedback
+                const showSelection = index === selectedAreaIndex && !(area.quadDistortion && area.quadDistortion.enabled);
+                drawAreaOutline(displayPoints, showSelection, area.isCutout, area.multiSelected);
             }
         });
         // Draw rectangle preview
@@ -8275,24 +8576,21 @@ if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint && l
 function drawStoneInAreaWithCutouts(area, isSelected) {
     if (!area || !area.points || area.points.length < 3) return;
 
-    // 1. ALWAYS draw the original flat area first.
-    // This ensures the "rest of the wall" never disappears.
-    drawStoneInAreaWithCutoutsHelper(ctx, area, isSelected);
-
-    // 2. Check if Quad Distortion is Active
-    if (area.quadDistortion && area.quadDistortion.enabled) {
-        
-        // 3. Draw the distorted texture layer ON TOP
+    // Check if Quad Distortion is Active and FINALIZED
+    if (area.quadDistortion && area.quadDistortion.enabled && !area.quadDistortion.isTemporary) {
+        // FINALIZED quad distortion: ONLY draw the distorted version
+        // But area.points remains the rectangle for operations
         applyPerspectiveDistortion(ctx, area.quadDistortion.points, area);
 
-        // 4. Draw the Orange UI Box (only if selecting or editing)
-        if (area.quadDistortion.isTemporary || isSelected) {
+        // Draw the selection outline if this area is selected
+        if (isSelected) {
             ctx.save();
+
+            // Draw the QUAD outline (orange) - this is the visual distortion
             ctx.strokeStyle = '#ff6600';
             ctx.lineWidth = 2;
-            // Dashed line if currently dragging, solid if just selected
-            ctx.setLineDash(area.quadDistortion.isTemporary ? [5, 5] : []);
-            
+            ctx.setLineDash([]);
+
             const qp = area.quadDistortion.points;
             ctx.beginPath();
             ctx.moveTo(qp[0].x, qp[0].y);
@@ -8301,17 +8599,73 @@ function drawStoneInAreaWithCutouts(area, isSelected) {
             }
             ctx.closePath();
             ctx.stroke();
-            
-            // Draw corner handles
+
+            // Draw quad corner handles (orange) - drag these to adjust distortion
             ctx.fillStyle = '#ff6600';
             for (let i = 0; i < qp.length; i++) {
                 ctx.beginPath();
-                ctx.arc(qp[i].x, qp[i].y, 4, 0, Math.PI * 2);
+                ctx.arc(qp[i].x, qp[i].y, 6, 0, Math.PI * 2);
                 ctx.fill();
             }
-            
+
+            // Draw the RECTANGLE outline (blue, dashed) - this is the operation area
+            ctx.strokeStyle = '#0066ff';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+
+            ctx.beginPath();
+            ctx.moveTo(area.points[0].x, area.points[0].y);
+            for (let i = 1; i < area.points.length; i++) {
+                ctx.lineTo(area.points[i].x, area.points[i].y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+
+            // Draw rectangle corner handles (blue, smaller) - drag these to move entire area
+            ctx.fillStyle = '#0066ff';
+            for (let i = 0; i < area.points.length; i++) {
+                ctx.beginPath();
+                ctx.arc(area.points[i].x, area.points[i].y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
             ctx.restore();
         }
+    } else if (area.quadDistortion && area.quadDistortion.enabled && area.quadDistortion.isTemporary) {
+        // TEMPORARY quad distortion (during dragging): Draw both layers
+        // 1. Draw the original flat area first
+        drawStoneInAreaWithCutoutsHelper(ctx, area, isSelected);
+
+        // 2. Draw the distorted texture layer ON TOP
+        applyPerspectiveDistortion(ctx, area.quadDistortion.points, area);
+
+        // 3. Draw the Orange UI Box for the temporary distortion
+        ctx.save();
+        ctx.strokeStyle = '#ff6600';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]); // Dashed while dragging
+
+        const qp = area.quadDistortion.points;
+        ctx.beginPath();
+        ctx.moveTo(qp[0].x, qp[0].y);
+        for (let i = 1; i < qp.length; i++) {
+            ctx.lineTo(qp[i].x, qp[i].y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+
+        // Draw corner handles
+        ctx.fillStyle = '#ff6600';
+        for (let i = 0; i < qp.length; i++) {
+            ctx.beginPath();
+            ctx.arc(qp[i].x, qp[i].y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    } else {
+        // No quad distortion: Draw normally
+        drawStoneInAreaWithCutoutsHelper(ctx, area, isSelected);
     }
 }
 
@@ -9286,7 +9640,13 @@ function updateAreaTextureMode(mode) {
         
         // Clear stone patterns to force regeneration
         stonePatterns = {};
-        
+
+        // Invalidate quad distortion cache when texture mode changes
+        const area = areas[selectedAreaIndex];
+        if (area.quadDistortion && area.quadDistortion.enabled) {
+            area.quadDistortion.capturedCanvas = null;
+        }
+
         enableMainAreaControls(areas[selectedAreaIndex]);
         showMessage('Texture mode changed to: ' + mode.replace('_', ' '));
     } else {
@@ -9302,10 +9662,25 @@ function finishDrawingArea() {
     if (currentPoints.length < 3) return;
 
     saveState();
-    
+
     // Simplify the points to reduce file size
-    const simplifiedPoints = simplifyPoints(currentPoints, 3);
+    let simplifiedPoints = simplifyPoints(currentPoints, 3);
     console.log(`Simplified ${currentPoints.length} points to ${simplifiedPoints.length} points`);
+
+    // CRITICAL: If creating a cutout on a distorted area, transform points to original space
+    if (isSubtractMode && selectedAreaIndex !== -1) {
+        const parentArea = areas[selectedAreaIndex];
+        if (parentArea && parentArea.quadDistortion && parentArea.quadDistortion.enabled) {
+            const quadPoints = parentArea.quadDistortion.points;
+            const originalPoints = parentArea.quadDistortion.originalPoints || parentArea.points;
+
+            console.log('Transforming cutout points from quad space to original space');
+            simplifiedPoints = simplifiedPoints.map(point =>
+                inversePerspectiveTransform(point, quadPoints, originalPoints)
+            );
+            console.log('Transformed cutout points:', simplifiedPoints);
+        }
+    }
 
     const newArea = {
         id: Date.now(),
@@ -9329,6 +9704,13 @@ rotation: 180,
             areas[selectedAreaIndex].cutouts = [];
         }
         areas[selectedAreaIndex].cutouts.push(newArea.id);
+        console.log('CUTOUT CREATED: parentId =', newArea.parentId, 'cutout id =', newArea.id, 'parent has quadDistortion =', !!areas[selectedAreaIndex].quadDistortion);
+
+        // CRITICAL: Invalidate the quad distortion cache when a cutout is added
+        if (areas[selectedAreaIndex].quadDistortion && areas[selectedAreaIndex].quadDistortion.enabled) {
+            areas[selectedAreaIndex].quadDistortion.capturedCanvas = null;
+            console.log('Invalidated quad distortion cache for parent area');
+        }
     }
 
     areas.push(newArea);
@@ -11486,13 +11868,18 @@ function setupControlListeners() {
             if (selectedAreaIndex !== -1 && areas[selectedAreaIndex] && !areas[selectedAreaIndex].isCutout) {
                 const area = areas[selectedAreaIndex];
                 area.scale = value;
-                
+
                 // Store scale in memory for this stone type
                 if (area.stone) {
                     stoneScaleMemory[area.stone] = value;
                     console.log(`Scale memory saved for stone: ${area.stone} = ${value}%`);
                 }
-                
+
+                // CRITICAL: Invalidate quad distortion cache when properties change
+                if (area.quadDistortion && area.quadDistortion.enabled) {
+                    area.quadDistortion.capturedCanvas = null;
+                }
+
                 stonePatterns = {};
                 drawCanvas();
             } else if (selectedSillIndex !== -1 && sills[selectedSillIndex]) {
@@ -11577,6 +11964,13 @@ function setupControlListeners() {
                 if (slider.property === 'perspectiveAngle') {
                     stonePatterns = {};
                 }
+
+                // CRITICAL: Invalidate quad distortion cache when properties change
+                const area = areas[selectedAreaIndex];
+                if (area.quadDistortion && area.quadDistortion.enabled) {
+                    area.quadDistortion.capturedCanvas = null;
+                }
+
                 drawCanvas();
             }
             
@@ -13307,14 +13701,24 @@ setTimeout(() => {
 function setupCanvasListeners() {
     if (!canvas) return;
 
+    // Helper function to update all lists at once (defined locally to be safe)
+    function updateAllLists() {
+        updateAreasList();
+        updateDepthList();
+        updateSillsList();
+        updateBrickRowsList();
+        updateDecorationsList();
+        updateAccentsList();
+    }
+
+    // --- CLICK HANDLER ---
     canvas.addEventListener('click', function(e) {
         const coords = getCanvasCoordinates(e);
-const x = coords.x;
-const y = coords.y;
+        const x = coords.x;
+        const y = coords.y;
 
-        // Check for button clicks in material selector mode
+        // 1. Check Material Selector Buttons
         if (isMaterialSelectorMode) {
-            // Check for X button clicks (remove from canvas)
             if (materialSelectorRemoveButtons.length > 0) {
                 for (let i = 0; i < materialSelectorRemoveButtons.length; i++) {
                     const btn = materialSelectorRemoveButtons[i];
@@ -13325,7 +13729,6 @@ const y = coords.y;
                     }
                 }
             }
-            // Check for star/favorite button clicks
             if (materialSelectorFavoriteButtons.length > 0) {
                 for (let i = 0; i < materialSelectorFavoriteButtons.length; i++) {
                     const btn = materialSelectorFavoriteButtons[i];
@@ -13336,11 +13739,9 @@ const y = coords.y;
                     }
                 }
             }
-            // Check for More Info button clicks
             if (materialSelectorInfoButtons.length > 0) {
                 for (let i = 0; i < materialSelectorInfoButtons.length; i++) {
                     const btn = materialSelectorInfoButtons[i];
-                    // Check if click is within the button rectangle
                     if (x >= btn.x - btn.width/2 && x <= btn.x + btn.width/2 &&
                         y >= btn.y - btn.height/2 && y <= btn.y + btn.height/2) {
                         showMaterialInfoPopup(btn.materialIndex);
@@ -13350,24 +13751,18 @@ const y = coords.y;
             }
         }
 
+        // 2. Check Decoration Placement
         if (isAddingDecoration) {
             saveState();
             const newDecoration = {
                 id: Date.now(),
-                x: x,
-                y: y,
+                x: x, y: y,
                 image: currentDecoration,
                 name: 'Decoration ' + (decorations.length + 1),
-                size: 100,
-                opacity: 100,
-                rotation: 0,
-                brightness: 100,
-                contrast: 100,
-                shadow: 0,
-                shadowOffset: 2,
-                shadowBlur: 2,
-                zIndex: decorations.length,
-                layer: 'front' // Default to front layer
+                size: 100, opacity: 100, rotation: 0,
+                brightness: 100, contrast: 100, shadow: 0,
+                shadowOffset: 2, shadowBlur: 2, zIndex: decorations.length,
+                layer: 'front'
             };
             decorations.push(newDecoration);
             selectedDecorationIndex = decorations.length - 1;
@@ -13381,28 +13776,22 @@ const y = coords.y;
             return;
         }
 
+        // 3. Check Drawing Points (Area, Depth, Sill, etc.)
         if (isDrawingArea) {
-    if (areaDrawingMode === 'rectangle') {
-        // Rectangle mode - this will be handled in mousedown/mouseup
-        return;
-    } else {
-        // Freehand mode - ADD POINT THROTTLING
-        // Only add point if it's far enough from the last point
-        if (currentPoints.length === 0 || 
-            Math.sqrt(Math.pow(x - currentPoints[currentPoints.length - 1].x, 2) + 
-                     Math.pow(y - currentPoints[currentPoints.length - 1].y, 2)) > 5) {
-            currentPoints.push({ x, y });
+             if (areaDrawingMode === 'rectangle') return; // Handled in mouseup
+             if (currentPoints.length === 0 || Math.hypot(x - currentPoints[currentPoints.length-1].x, y - currentPoints[currentPoints.length-1].y) > 5) {
+                currentPoints.push({x, y});
+             }
+             drawCanvas();
+             return;
         }
-        drawCanvas();
-        return;
-    }
-} else if (isDrawingDepthEdge) {
-            currentDepthEdgePoints.push({ x, y });
-            
+        
+        if (isDrawingDepthEdge) {
+            currentDepthEdgePoints.push({x,y});
+            // Auto-finish line mode after 2 points
             if (depthEdgeMode === 'line' && currentDepthEdgePoints.length === 2) {
-                // Finish line depth edge
                 saveState();
-                const newEdge = {
+                const newDepthEdge = {
                     id: Date.now(),
                     points: [...currentDepthEdgePoints],
                     mode: 'line',
@@ -13412,1175 +13801,704 @@ const y = coords.y;
                     shadowOffset: 5,
                     shadowBlur: 3
                 };
-                depthEdges.push(newEdge);
+                depthEdges.push(newDepthEdge);
                 selectedDepthEdgeIndex = depthEdges.length - 1;
                 isDrawingDepthEdge = false;
                 currentDepthEdgePoints = [];
                 isInDrawingMode = false;
-                enableDepthEdgeControls(newEdge);
+                enableDepthEdgeControls(newDepthEdge);
                 updateDepthList();
-                showMessage('Depth edge line created.');
-                drawCanvas();
-            } else if (depthEdgeMode === 'area') {
-                // Continue drawing area points
-                drawCanvas();
+                showMessage('Depth edge created.');
             }
+            drawCanvas();
             return;
-        } else if (isDrawingSill) {
-            currentSillPoints.push({ x, y });
+        }
+        
+        if (isDrawingSill) { 
+            currentSillPoints.push({x,y}); 
             if (currentSillPoints.length === 2) {
                 saveState();
-                const newSill = {
-                    id: Date.now(),
-                    points: [...currentSillPoints],
-                    type: currentSillType,
+                sills.push({
+                    id: Date.now(), points: [...currentSillPoints], type: currentSillType,
                     texture: currentSillType === 'wood' ? 'oak' : currentSillTexture,
-                    color: currentSillColor,
-                    thickness: sillThickness,
-                    length: currentSillLength,
-                    jointStyle: currentSillJointStyle,
-                    mortarColor: currentSillMortarColor,
-                    mortarThickness: currentSillMortarThickness,
-                    scale: GLOBAL_STONE_SCALE,
-                    rotation: 0,
-                    horizontalOffset: 0,
-                    verticalOffset: 0,
-                    brightness: 100,
-                    contrast: 100,
-                    angle3d: 0,
-                    shadow: 0,
-                    shadowOffset: 2,
-                    shadowBlur: 2
-                };
-                sills.push(newSill);
+                    color: currentSillColor, thickness: sillThickness, length: currentSillLength,
+                    scale: GLOBAL_STONE_SCALE, rotation: 0, shadow: 0,
+                    horizontalOffset: 0, verticalOffset: 0, brightness: 100, contrast: 100, angle3d: 0, shadowOffset: 2, shadowBlur: 2
+                });
                 selectedSillIndex = sills.length - 1;
-                isDrawingSill = false;
-                currentSillPoints = [];
-                isInDrawingMode = false;
-                updateSillsList();
-                enableSillControls(newSill);
+                isDrawingSill = false; currentSillPoints = []; isInDrawingMode = false;
+                updateSillsList(); enableSillControls(sills[sills.length-1]);
                 showMessage('Sill/Cap created.');
-                drawCanvas();
             }
-            return;
-        } else if (isDrawingBrickRow) {
-            currentBrickRowPoints.push({ x, y });
+            drawCanvas(); 
+            return; 
+        }
+        
+        if (isDrawingBrickRow) { 
+            currentBrickRowPoints.push({x,y}); 
             if (currentBrickRowPoints.length === 2) {
                 saveState();
-                const newBrickRow = {
-    id: Date.now(),
-    points: [...currentBrickRowPoints],
-    color: currentBrickColor,
-    texture: currentBrickTexture,
-    height: brickRowHeight,
-    mortarColor: currentBrickMortarColor,
-    mortarThickness: brickMortarThickness,
-    scale: 60  // Middle of new range
-};
-                brickRows.push(newBrickRow);
+                brickRows.push({
+                    id: Date.now(), points: [...currentBrickRowPoints],
+                    color: currentBrickColor, texture: currentBrickTexture,
+                    height: brickRowHeight, scale: 60,
+                    mortarColor: currentBrickMortarColor, mortarThickness: brickMortarThickness
+                });
                 selectedBrickRowIndex = brickRows.length - 1;
-                isDrawingBrickRow = false;
-                currentBrickRowPoints = [];
-                isInDrawingMode = false;
-                updateBrickRowsList();
-                enableBrickRowControls(newBrickRow);
+                isDrawingBrickRow = false; currentBrickRowPoints = []; isInDrawingMode = false;
+                updateBrickRowsList(); enableBrickRowControls(brickRows[brickRows.length-1]);
                 showMessage('Brick row created.');
-                drawCanvas();
             }
-            return;
-        } else if (isDrawingAccent) {
-    currentAccentPoints.push({ x, y });
-    
-    if (currentAccentType === 'strip-flashing' && currentAccentPoints.length === 2) {
-        // Finish line-based accent (strip flashing)
-        saveState();
-        const newAccent = {
-            id: Date.now(),
-            points: [...currentAccentPoints],
-            type: currentAccentType,
-            color: currentFlashingColor,
-            thickness: ACCENT_TYPES[currentAccentType]?.defaultThickness || 2,
-            opacity: 100,
-            shadowOffset: 2,
-            shadowBlur: 3,
-            name: `${ACCENT_TYPES[currentAccentType]?.name || 'Accent'} ${accents.length + 1}`
-        };
-        accents.push(newAccent);
-        selectedAccentIndex = accents.length - 1;
-        isDrawingAccent = false;
-        currentAccentPoints = [];
-        isInDrawingMode = false;
-        updateAccentsList();
-        enableAccentControls(newAccent);
-        showMessage(`${ACCENT_TYPES[currentAccentType]?.name || 'Accent'} created.`);
-        drawCanvas();
-    } else if (currentAccentType === 'flat-cap') {
-        // Continue drawing area-based accent (flat cap) - finish on double-click
-        drawCanvas();
-    }
-    return;
+            drawCanvas(); 
+            return; 
         }
         
-       // PRIORITIZE drawing tools selection when tools are active
-        if (isDrawingToolsActive && currentDrawingTool === 'pointer') {
-            console.log('Pointer tool active, checking for drawing selection at:', x, y);
-            
-            // Check for annotation selection FIRST when using pointer tool
-            const clickedAnnotation = getAnnotationAtPoint(x, y);
-            if (clickedAnnotation !== null) {
-                console.log('Found annotation at index:', clickedAnnotation);
-                selectedAnnotation = clickedAnnotation;
-                const annotation = annotations[selectedAnnotation];
-                
-                // Update tool panel controls to show selected annotation properties
-                updateToolPanelForAnnotation(annotation);
-                
-                redrawAnnotations();
-                showMessage('Drawing selected. Use tool panel to edit or drag to move.');
-                return; // Exit early - we found and selected a drawing
-            } else {
-                console.log('No annotation found at click point');
-                // Deselect if clicking on empty area
-                selectedAnnotation = null;
-                redrawAnnotations();
-                showMessage('No drawing found at this location.');
-                return;
+        if (isDrawingAccent) { 
+            currentAccentPoints.push({x,y}); 
+            if (currentAccentType === 'strip-flashing' && currentAccentPoints.length === 2) {
+                 saveState();
+                 accents.push({
+                     id: Date.now(), points: [...currentAccentPoints], type: currentAccentType,
+                     color: currentFlashingColor, thickness: 2, opacity: 100,
+                     shadowOffset: 2, shadowBlur: 3, 
+                     name: `${ACCENT_TYPES[currentAccentType]?.name || 'Accent'} ${accents.length + 1}`
+                 });
+                 selectedAccentIndex = accents.length - 1;
+                 isDrawingAccent = false; currentAccentPoints = []; isInDrawingMode = false;
+                 updateAccentsList(); enableAccentControls(accents[accents.length-1]);
+                 showMessage('Strip Flashing created.');
             }
+            drawCanvas(); 
+            return; 
         }
 
-        // Element selection logic - only if not in drawing mode and not using drawing tools
-        if (isInDrawingMode || isDrawingToolsActive) return;
+        // 4. SELECTION LOGIC
+        if (isInDrawingMode || isDrawingToolsActive) {
+             if (isDrawingToolsActive && currentDrawingTool === 'pointer') {
+                const clickedAnnotation = getAnnotationAtPoint(x, y);
+                if (clickedAnnotation !== null) {
+                    selectedAnnotation = clickedAnnotation;
+                    updateToolPanelForAnnotation(annotations[selectedAnnotation]);
+                    redrawAnnotations();
+                    showMessage('Drawing selected.');
+                    return;
+                } else {
+                    selectedAnnotation = null;
+                    redrawAnnotations();
+                }
+            }
+            return;
+        }
+
+        let found = false;
         
-        let foundElement = false;
-        
-        // Check decorations first (highest priority for selection)
+        // Check Decorations
         for (let i = decorations.length - 1; i >= 0; i--) {
-            const decoration = decorations[i];
-            if (decoration && decorationImages[decoration.image]) {
-                const img = decorationImages[decoration.image];
-                const size = (decoration.size || 100) / 100;
-                const width = img.width * size;
-                const height = img.height * size;
-                
-                const dx = x - decoration.x;
-                const dy = y - decoration.y;
-                const rotation = -(decoration.rotation || 0) * Math.PI / 180;
-                const cos = Math.cos(rotation);
-                const sin = Math.sin(rotation);
-                const localX = dx * cos - dy * sin;
-                const localY = dx * sin + dy * cos;
-                
-                if (Math.abs(localX) <= width/2 && Math.abs(localY) <= height/2) {
-                    selectedDecorationIndex = i;
-                    selectedAreaIndex = -1;
-                    selectedDepthEdgeIndex = -1;
-                    selectedSillIndex = -1;
-                    selectedBrickRowIndex = -1;
-                    updateAreasList();
-                    updateDepthList();
-                    updateSillsList();
-                    updateBrickRowsList();
-                    updateDecorationsList();
-                    enableDecorationControls(decoration);
-                    drawCanvas();
-                    foundElement = true;
-                    break;
+            const d = decorations[i];
+            if (d && decorationImages[d.image]) {
+                const img = decorationImages[d.image];
+                const size = d.size || 100;
+                if (Math.abs(x - d.x) < (img.width * (size/100))/2 && Math.abs(y - d.y) < (img.height * (size/100))/2) {
+                     selectedDecorationIndex = i;
+                     selectedAreaIndex = -1; selectedDepthEdgeIndex = -1; selectedSillIndex = -1; selectedBrickRowIndex = -1; selectedAccentIndex = -1;
+                     updateAllLists();
+                     enableDecorationControls(d);
+                     drawCanvas();
+                     found = true;
+                     break;
                 }
             }
         }
-        // Check accents
-if (!foundElement) {
-    for (let i = accents.length - 1; i >= 0; i--) {
-        if (accents[i] && accents[i].points && accents[i].points.length >= 2) {
-            if (isPointNearLine({ x, y }, accents[i].points[0], accents[i].points[1], 15)) {
-                selectedAccentIndex = i;
-                selectedAreaIndex = -1;
-                selectedDepthEdgeIndex = -1;
-                selectedSillIndex = -1;
-                selectedBrickRowIndex = -1;
-                selectedDecorationIndex = -1;
-                updateAreasList();
-                updateDepthList();
-                updateSillsList();
-                updateBrickRowsList();
-                updateDecorationsList();
-                updateAccentsList();
-                enableAccentControls(accents[i]);
-                drawCanvas();
-                foundElement = true;
-                break;
-            }
-        }
-    }
-}
-        // Check depth edges
-        if (!foundElement) {
+
+        // Check Depth Edges
+        if (!found) {
             for (let i = depthEdges.length - 1; i >= 0; i--) {
-                if (depthEdges[i] && depthEdges[i].points && depthEdges[i].points.length >= 2) {
-                    let isNear = false;
-                    
-                    if (depthEdges[i].mode === 'area' && depthEdges[i].points.length >= 3) {
-                        // Check if point is inside depth area
-                        isNear = isPointInPolygon({ x, y }, depthEdges[i].points);
-                    } else {
-                        // Check if point is near line
-                        isNear = isPointNearLine({ x, y }, depthEdges[i].points[0], depthEdges[i].points[1], 15);
-                    }
-                    
-                    if (isNear) {
+                const edge = depthEdges[i];
+                if (!edge || !edge.points) continue;
+
+                if (edge.mode === 'line' && edge.points.length >= 2) {
+                    // Check if click is near the line
+                    if (isPointNearLine({x, y}, edge.points[0], edge.points[1], 15)) {
                         selectedDepthEdgeIndex = i;
                         selectedAreaIndex = -1;
                         selectedSillIndex = -1;
                         selectedBrickRowIndex = -1;
                         selectedDecorationIndex = -1;
-                        updateAreasList();
-                        updateDepthList();
-                        updateSillsList();
-                        updateBrickRowsList();
-                        updateDecorationsList();
-                        enableDepthEdgeControls(depthEdges[i]);
+                        selectedAccentIndex = -1;
+                        updateAllLists();
+                        enableDepthEdgeControls(edge);
                         drawCanvas();
-                        foundElement = true;
+                        found = true;
                         break;
                     }
-                }
-            }
-        }
-        
-       // Check areas
-        if (!foundElement) {
-            for (let i = areas.length - 1; i >= 0; i--) {
-                if (areas[i] && areas[i].points && isPointInPolygon({ x, y }, areas[i].points)) {
-                    selectedAreaIndex = i;
-                    selectedDepthEdgeIndex = -1;
-                    selectedSillIndex = -1;
-                    selectedBrickRowIndex = -1;
-                    selectedDecorationIndex = -1;
-                    selectedAccentIndex = -1; // Clear accent selection
-                    updateAreasList();
-                    updateDepthList();
-                    updateSillsList();
-                    updateBrickRowsList();
-                    updateDecorationsList();
-                    updateAccentsList(); // Update accent list
-                    if (!areas[i].isCutout) {
-                        enableMainAreaControls(areas[i]);
-                    } else {
-                        disableMainAreaControls();
-                    }
-                    drawCanvas();
-                    foundElement = true;
-                    break;
-                }
-            }
-        }
-        
-        // Check sills
-        if (!foundElement) {
-            for (let i = sills.length - 1; i >= 0; i--) {
-                if (sills[i] && sills[i].points && sills[i].points.length >= 2) {
-                    if (isPointNearLine({ x, y }, sills[i].points[0], sills[i].points[1], 15)) {
-                        selectedSillIndex = i;
+                } else if (edge.mode === 'area' && edge.points.length >= 3) {
+                    // Check if click is inside the area polygon
+                    if (isPointInPolygon({x, y}, edge.points)) {
+                        selectedDepthEdgeIndex = i;
                         selectedAreaIndex = -1;
-                        selectedDepthEdgeIndex = -1;
+                        selectedSillIndex = -1;
                         selectedBrickRowIndex = -1;
                         selectedDecorationIndex = -1;
-                        updateAreasList();
-                        updateDepthList();
-                        updateSillsList();
-                        updateBrickRowsList();
-                        updateDecorationsList();
-                        enableSillControls(sills[i]);
+                        selectedAccentIndex = -1;
+                        updateAllLists();
+                        enableDepthEdgeControls(edge);
                         drawCanvas();
-                        foundElement = true;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Check Accents
+        if (!found) {
+            for (let i = accents.length - 1; i >= 0; i--) {
+                if (accents[i] && accents[i].points && accents[i].points.length >= 2) {
+                     if (isPointNearLine({x,y}, accents[i].points[0], accents[i].points[1], 15)) {
+                        selectedAccentIndex = i;
+                        selectedAreaIndex = -1; selectedDepthEdgeIndex = -1; selectedSillIndex = -1; selectedBrickRowIndex = -1; selectedDecorationIndex = -1;
+                        updateAllLists();
+                        enableAccentControls(accents[i]);
+                        drawCanvas();
+                        found = true;
+                        break;
+                     }
+                }
+            }
+        }
+        
+        // Check Areas
+        if (!found) {
+            for (let i = areas.length - 1; i >= 0; i--) {
+                if (areas[i] && areas[i].points) {
+                    let checkPoints = areas[i].points;
+
+                    // CRITICAL: For areas with quad distortion, check against quad points not rectangle
+                    if (!areas[i].isCutout && areas[i].quadDistortion && areas[i].quadDistortion.enabled) {
+                        checkPoints = areas[i].quadDistortion.points;
+                    }
+                    // CRITICAL: For cutouts on distorted areas, transform points to quad space for hit testing
+                    else if (areas[i].isCutout && areas[i].parentId) {
+                        const parentArea = areas.find(a => a && a.id === areas[i].parentId);
+                        if (parentArea && parentArea.quadDistortion && parentArea.quadDistortion.enabled) {
+                            const quadPoints = parentArea.quadDistortion.points;
+                            const originalPoints = parentArea.quadDistortion.originalPoints || parentArea.points;
+                            checkPoints = areas[i].points.map(point =>
+                                forwardPerspectiveTransform(point, quadPoints, originalPoints)
+                            );
+                        }
+                    }
+
+                    if (isPointInPolygon({ x, y }, checkPoints)) {
+                        if (e.ctrlKey || e.metaKey) {
+                            areas[i].multiSelected = !areas[i].multiSelected;
+                        } else {
+                            areas.forEach(a => { if(a) a.multiSelected = false; });
+                            areas[i].multiSelected = true;
+                        }
+
+                        selectedAreaIndex = i;
+                        selectedDepthEdgeIndex = -1; selectedSillIndex = -1; selectedBrickRowIndex = -1; selectedDecorationIndex = -1; selectedAccentIndex = -1;
+
+                        updateAllLists();
+                        if (!areas[i].isCutout) enableMainAreaControls(areas[i]);
+                        else disableMainAreaControls();
+
+                        drawCanvas();
+                        found = true;
                         break;
                     }
                 }
             }
         }
         
-        // Check brick rows
-        if (!foundElement) {
-            for (let i = brickRows.length - 1; i >= 0; i--) {
-                if (brickRows[i] && brickRows[i].points && brickRows[i].points.length >= 2) {
-                    // FIXED: Check if point is within the brick row area, not just near the line
-                    const brickRow = brickRows[i];
-                    const start = brickRow.points[0];
-                    const end = brickRow.points[1];
-                    const height = brickRow.height || brickRowHeight;
-                    const scale = scaleToBrickSize(brickRow.scale || GLOBAL_STONE_SCALE);
-                    const scaledHeight = height * scale;
-                    
-                    // Calculate direction and perpendicular
-                    const dx = end.x - start.x;
-                    const dy = end.y - start.y;
-                    const length = Math.sqrt(dx * dx + dy * dy);
-                    const dirX = dx / length;
-                    const dirY = dy / length;
-                    const perpX = -dirY;
-                    const perpY = dirX;
-                    
-                    // Create the brick row rectangle points
-                    const brickRowPolygon = [
-                        { x: start.x, y: start.y },
-                        { x: end.x, y: end.y },
-                        { x: end.x + perpX * scaledHeight, y: end.y + perpY * scaledHeight },
-                        { x: start.x + perpX * scaledHeight, y: start.y + perpY * scaledHeight }
-                    ];
-                    
-                    // Check if click point is inside the brick row rectangle
-                    if (isPointInPolygon({ x, y }, brickRowPolygon)) {
-                        selectedBrickRowIndex = i;
-                        selectedAreaIndex = -1;
-                        selectedDepthEdgeIndex = -1;
-                        selectedSillIndex = -1;
-                        selectedDecorationIndex = -1;
-                        updateAreasList();
-                        updateDepthList();
-                        updateSillsList();
-                        updateBrickRowsList();
-                        updateDecorationsList();
-                        enableBrickRowControls(brickRows[i]);
-                        drawCanvas();
-                        foundElement = true;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        if (!foundElement) {
+        if (!found) {
+            console.log('DESELECTING - clicked outside everything');
             selectedAreaIndex = -1;
-            selectedDepthEdgeIndex = -1;
-            selectedSillIndex = -1;
-            selectedBrickRowIndex = -1;
-            selectedDecorationIndex = -1;
-            selectedAccentIndex = -1; // Clear accent selection
-            updateAreasList();
-            updateDepthList();
-            updateSillsList();
-            updateBrickRowsList();
-            updateDecorationsList();
-            updateAccentsList(); // Update accent list
+            selectedDepthEdgeIndex = -1; selectedSillIndex = -1; selectedBrickRowIndex = -1; selectedDecorationIndex = -1; selectedAccentIndex = -1;
+            areas.forEach(a => { if(a) a.multiSelected = false; });
+            updateAllLists();
             disableMainAreaControls();
             drawCanvas();
         }
     });
 
-    canvas.addEventListener('dblclick', function(e) {
-    if (isDrawingArea && currentPoints.length >= 3) {
-        finishDrawingArea();
-    } else if (isDrawingDepthEdge && depthEdgeMode === 'area' && currentDepthEdgePoints.length >= 3) {
-        finishDrawingDepthArea();
-    } else if (isDrawingAccent && currentAccentType === 'flat-cap' && currentAccentPoints.length >= 3) {
-        finishDrawingFlatCap();
-    }
-});
-
-    // Mouse down for potential dragging and decoration resizing - FIXED
+    // --- MOUSE DOWN ---
     canvas.addEventListener('mousedown', function(e) {
-        console.log('MOUSEDOWN EVENT FIRED');
-
         const coords = getCanvasCoordinates(e);
-const x = coords.x;
-const y = coords.y;
-        console.log('Mouse coordinates:', x, y, 'isDrawingQuadDistortion:', isDrawingQuadDistortion);
-      // Handle rectangle drawing start
-if (isDrawingArea && areaDrawingMode === 'rectangle' && !rectangleStartPoint) {
-    rectangleStartPoint = { x, y };
-    return;
-}
-
-        // Handle 4-point quad distortion
+        const x = coords.x;
+        const y = coords.y;
+        
+        // 1. Handle Quad Distortion CREATION Mode
         if (isDrawingQuadDistortion) {
-            console.log('Quad distortion mode active, clicked at:', x, y);
-            // Check if clicking on existing corner to drag
             const cornerIndex = getQuadCornerAtPoint(x, y);
-            console.log('Corner index:', cornerIndex);
             if (cornerIndex !== -1) {
                 isDraggingQuadCorner = true;
                 draggingQuadCornerIndex = cornerIndex;
+                isEditingExistingQuad = false; 
                 canvas.style.cursor = 'move';
-                console.log('Starting to drag corner', cornerIndex);
                 return;
             }
-
-            // Add new point if less than 4 points
             if (currentQuadPoints.length < 4) {
                 currentQuadPoints.push({ x, y });
-                console.log('Added point', currentQuadPoints.length, ':', { x, y });
-
-                // If we just placed the 4th point, apply distortion in real-time
                 if (currentQuadPoints.length === 4) {
                     applyQuadDistortionRealtime();
-                    showMessage('4 points set! Drag corners to adjust distortion. Press Enter when done.');
+                    showMessage('4 points set! Drag corners to adjust. Press Enter when done.');
                 }
-
                 drawCanvas();
                 return;
             }
         }
 
-        // Check for decoration resizing FIRST - FIXED
-        if (selectedDecorationIndex !== -1 && decorations[selectedDecorationIndex]) {
-            const decoration = decorations[selectedDecorationIndex];
-            const resizeHandle = getDecorationResizeHandle(x, y, decoration);
-            
-            if (resizeHandle) {
-                isResizingDecoration = true;
-                decorationResizeHandle = resizeHandle;
-                decorationResizeStartSize = decoration.size || 100;
-                decorationResizeStartMouse = { x, y };
-                canvas.style.cursor = getResizeCursor(resizeHandle);
-                saveState();
-                return; // Exit early to prevent other mouse down logic
+        // 2. Handle Quad Distortion EDIT Mode
+        if (selectedAreaIndex !== -1 && areas[selectedAreaIndex] &&
+            areas[selectedAreaIndex].quadDistortion &&
+            areas[selectedAreaIndex].quadDistortion.enabled) {
+
+            const qPoints = areas[selectedAreaIndex].quadDistortion.points;
+
+            for(let i=0; i<4; i++) {
+                const dist = Math.hypot(x - qPoints[i].x, y - qPoints[i].y);
+                if (dist <= 25) {
+                    isDraggingQuadCorner = true;
+                    draggingQuadCornerIndex = i;
+                    isEditingExistingQuad = true;
+                    canvas.style.cursor = 'move';
+                    return;
+                }
             }
         }
-        
-        // Check for area vertex dragging
+
+        // 3. Handle Rectangle Drawing Start
+        if (isDrawingArea && areaDrawingMode === 'rectangle' && !rectangleStartPoint) {
+            rectangleStartPoint = { x, y };
+            return;
+        }
+
+        // 4. Handle Standard Dragging
         if (selectedAreaIndex !== -1 && areas[selectedAreaIndex]) {
-            const area = areas[selectedAreaIndex];
-            for (let i = 0; i < area.points.length; i++) {
-                if (isPointNearPoint({ x, y }, area.points[i], 8)) {
+             const area = areas[selectedAreaIndex];
+
+            // CRITICAL: Skip rectangle vertex dragging for areas with quad distortion
+            // Only quad corners should be draggable (handled in section 2 above)
+            const skipVertexDrag = !area.isCutout && area.quadDistortion && area.quadDistortion.enabled;
+
+            // CRITICAL: For cutouts on distorted areas, check vertices in quad space
+            let checkPoints = area.points;
+            let parentQuadInfo = null;
+
+            if (area.isCutout && area.parentId) {
+                const parentArea = areas.find(a => a && a.id === area.parentId);
+                if (parentArea && parentArea.quadDistortion && parentArea.quadDistortion.enabled) {
+                    parentQuadInfo = {
+                        quadPoints: parentArea.quadDistortion.points,
+                        originalPoints: parentArea.quadDistortion.originalPoints || parentArea.points
+                    };
+                    checkPoints = area.points.map(point =>
+                        forwardPerspectiveTransform(point, parentQuadInfo.quadPoints, parentQuadInfo.originalPoints)
+                    );
+                }
+            }
+
+            if (!skipVertexDrag) {
+                for (let i = 0; i < checkPoints.length; i++) {
+                    if (isPointNearPoint({ x, y }, checkPoints[i], 8)) {
+                        isDraggingVertex = true;
+                        draggedVertexIndex = i;
+                        draggedVertexStartPos = {x: area.points[i].x, y: area.points[i].y}; // Store ORIGINAL space position
+                        draggedElementType = 'area';
+                        draggedElementIndex = selectedAreaIndex;
+
+                        // Store parent quad info for transform during drag
+                        if (parentQuadInfo) {
+                            window.dragParentQuadInfo = parentQuadInfo;
+                        } else {
+                            window.dragParentQuadInfo = null;
+                        }
+
+                        // Store quad start points if this area has distortion
+                        if (area.quadDistortion && area.quadDistortion.enabled) {
+                            dragQuadStartPoints = area.quadDistortion.points.map(p => ({x: p.x, y: p.y}));
+                        } else {
+                            dragQuadStartPoints = [];
+                        }
+
+                        canvas.style.cursor = 'pointer';
+                        saveState();
+                        return;
+                    }
+                }
+            }
+
+            // CRITICAL: Don't start whole-area drag if clicking near a quad corner
+            // The quad corner drag handler (section 2) should have caught this, but
+            // if we're within the hit radius of any quad corner, skip area drag
+            let skipAreaDrag = false;
+            if (area.quadDistortion && area.quadDistortion.enabled) {
+                const qPoints = area.quadDistortion.points;
+                for (let i = 0; i < 4; i++) {
+                    const dist = Math.hypot(x - qPoints[i].x, y - qPoints[i].y);
+                    if (dist <= 25) {
+                        skipAreaDrag = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!skipAreaDrag && isPointInPolygon({ x, y }, checkPoints)) {
+                isDragging = true;
+                draggedElementType = 'area';
+                draggedElementIndex = selectedAreaIndex;
+                dragStartX = x;
+                dragStartY = y;
+                dragElementStartPoints = [...area.points];
+
+                // Store parent quad info for transform during drag
+                if (parentQuadInfo) {
+                    window.dragParentQuadInfo = parentQuadInfo;
+                } else {
+                    window.dragParentQuadInfo = null;
+                }
+
+                // Store quad distortion start points if area has distortion
+                if (area.quadDistortion && area.quadDistortion.enabled) {
+                    dragQuadStartPoints = area.quadDistortion.points.map(p => ({x: p.x, y: p.y}));
+                } else {
+                    dragQuadStartPoints = [];
+                }
+
+                canvas.style.cursor = 'move';
+                saveState();
+            }
+        }
+
+        // Handle Depth Edge vertex dragging and whole-element dragging
+        if (selectedDepthEdgeIndex !== -1 && depthEdges[selectedDepthEdgeIndex]) {
+            const edge = depthEdges[selectedDepthEdgeIndex];
+            console.log('Depth edge mousedown check - mode:', edge.mode, 'points:', edge.points.length);
+
+            // Check if clicking near a vertex
+            for (let i = 0; i < edge.points.length; i++) {
+                const dist = Math.hypot(x - edge.points[i].x, y - edge.points[i].y);
+                console.log('Vertex', i, 'distance:', dist);
+                if (isPointNearPoint({ x, y }, edge.points[i], 8)) {
+                    console.log('Starting vertex drag for depth edge');
                     isDraggingVertex = true;
                     draggedVertexIndex = i;
+                    draggedVertexStartPos = {x: edge.points[i].x, y: edge.points[i].y};
+                    draggedElementType = 'depthEdge';
+                    draggedElementIndex = selectedDepthEdgeIndex;
                     canvas.style.cursor = 'pointer';
                     saveState();
                     return;
                 }
             }
+            // Check if clicking inside depth area to drag whole element
+            if (edge.mode === 'area' && edge.points.length >= 3 && isPointInPolygon({ x, y }, edge.points)) {
+                console.log('Starting whole depth area drag');
+                isDragging = true;
+                draggedElementType = 'depthEdge';
+                draggedElementIndex = selectedDepthEdgeIndex;
+                dragStartX = x;
+                dragStartY = y;
+                dragElementStartPoints = [...edge.points];
+                canvas.style.cursor = 'move';
+                saveState();
+            }
+            // For line mode, check if clicking near the line
+            if (edge.mode === 'line' && edge.points.length >= 2 && isPointNearLine({ x, y }, edge.points[0], edge.points[1], 15)) {
+                console.log('Starting whole depth line drag');
+                isDragging = true;
+                draggedElementType = 'depthEdge';
+                draggedElementIndex = selectedDepthEdgeIndex;
+                dragStartX = x;
+                dragStartY = y;
+                dragElementStartPoints = [...edge.points];
+                canvas.style.cursor = 'move';
+                saveState();
+            }
         }
-// Check for brick row vertex dragging - ENHANCED WITH 4 CORNERS
-if (selectedBrickRowIndex !== -1 && brickRows[selectedBrickRowIndex]) {
-    const brickRow = brickRows[selectedBrickRowIndex];
-    
-    // Convert 2-point brick row to 4-point rectangle if needed
-    if (brickRow.points.length === 2) {
-        const start = brickRow.points[0];
-        const end = brickRow.points[1];
-        const height = brickRow.height || brickRowHeight;
-        const scale = scaleToBrickSize(brickRow.scale || GLOBAL_STONE_SCALE);
-        const scaledHeight = height * scale;
-        
-        // Calculate direction and perpendicular
-        const dx = end.x - start.x;
-        const dy = end.y - start.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        const dirX = dx / length;
-        const dirY = dy / length;
-        const perpX = -dirY;
-        const perpY = dirX;
-        
-        // Create 4 corner points
-        brickRow.points = [
-            { x: start.x, y: start.y },                                    // Bottom left
-            { x: end.x, y: end.y },                                        // Bottom right
-            { x: end.x + perpX * scaledHeight, y: end.y + perpY * scaledHeight },   // Top right
-            { x: start.x + perpX * scaledHeight, y: start.y + perpY * scaledHeight } // Top left
-        ];
-    }
-    
-    // Check for vertex dragging on all 4 corners
-    for (let i = 0; i < brickRow.points.length; i++) {
-        if (isPointNearPoint({ x, y }, brickRow.points[i], 8)) {
-            isDraggingVertex = true;
-            draggedVertexIndex = i;
-            draggedElementType = 'brickRow';
-            draggedElementIndex = selectedBrickRowIndex;
-            canvas.style.cursor = 'pointer';
-            saveState();
-            console.log(`Starting to drag brick row vertex ${i}`);
-            return;
+
+        if (selectedDecorationIndex !== -1 && decorations[selectedDecorationIndex]) {
+             const d = decorations[selectedDecorationIndex];
+             const handle = getDecorationResizeHandle(x, y, d);
+             if (handle) {
+                 isResizingDecoration = true;
+                 decorationResizeHandle = handle;
+                 decorationResizeStartSize = d.size || 100;
+                 decorationResizeStartMouse = {x,y};
+                 saveState();
+                 return;
+             }
+             const img = decorationImages[d.image];
+             if (img) {
+                 if (Math.abs(x - d.x) < 30 && Math.abs(y - d.y) < 30) {
+                     isDragging = true;
+                     draggedElementType = 'decoration';
+                     draggedElementIndex = selectedDecorationIndex;
+                     dragStartX = x; dragStartY = y;
+                     dragElementStartPoints = [{x: d.x, y: d.y}];
+                     saveState();
+                 }
+             }
         }
-    }
-}
-        // Check for accent endpoint dragging - IMPROVED PRIORITY
+        
         if (selectedAccentIndex !== -1 && accents[selectedAccentIndex]) {
             const accent = accents[selectedAccentIndex];
-            
-            if (accent.type === 'strip-flashing' && accent.points.length >= 2) {
-                // Check endpoints FIRST - smaller threshold for precise clicking
-                let clickedEndpoint = false;
-                for (let i = 0; i < accent.points.length; i++) {
-                    if (isPointNearPoint({ x, y }, accent.points[i], 8)) { // Smaller threshold - must be close
+            if (accent.points) {
+                for(let i=0; i<accent.points.length; i++) {
+                    if (isPointNearPoint({x,y}, accent.points[i], 8)) {
                         isDraggingVertex = true;
                         draggedVertexIndex = i;
                         draggedElementType = 'accent';
                         draggedElementIndex = selectedAccentIndex;
                         canvas.style.cursor = 'pointer';
                         saveState();
-                        console.log(`Starting to drag accent endpoint ${i}`);
-                        clickedEndpoint = true;
-                        return; // Exit early - endpoint dragging takes priority
-                    }
-                }
-                
-                // Only check for whole-accent dragging if NOT near an endpoint
-                if (!clickedEndpoint) {
-                    const thickness = accent.thickness || 2;
-                    const canDragWhole = isPointNearLine({ x, y }, accent.points[0], accent.points[1], thickness + 10);
-                    
-                    if (canDragWhole) {
-                        console.log('Clicking on middle of accent - will allow whole accent operations');
-                        // Don't start dragging here - let the normal accent dragging code handle it
-                        // This just ensures we detected it's a middle click, not endpoint click
-                    }
-                }
-            }
-        }
-        
-        // Check for depth edge resize handles
-       // Check for depth edge resize handles
-        if (selectedDepthEdgeIndex !== -1 && depthEdges[selectedDepthEdgeIndex]) {
-            const depthEdge = depthEdges[selectedDepthEdgeIndex];
-            
-            if (depthEdge.mode === 'line' && depthEdge.points.length === 2) {
-                // Handle line resize - FIXED with larger threshold
-                if (isPointNearPoint({ x, y }, depthEdge.points[0], 12)) {
-                    isDraggingVertex = true;
-                    draggedVertexIndex = 0;
-                    draggedElementType = 'depthEdge';
-                    draggedElementIndex = selectedDepthEdgeIndex;
-                    canvas.style.cursor = 'pointer';
-                    saveState();
-                    console.log('Starting to drag depth edge start point');
-                    return;
-                }
-                
-                if (isPointNearPoint({ x, y }, depthEdge.points[1], 12)) {
-                    isDraggingVertex = true;
-                    draggedVertexIndex = 1;
-                    draggedElementType = 'depthEdge';
-                    draggedElementIndex = selectedDepthEdgeIndex;
-                    canvas.style.cursor = 'pointer';
-                    saveState();
-                    console.log('Starting to drag depth edge end point');
-                    return;
-                }
-            } else if (depthEdge.mode === 'area') {
-                // Handle area vertex dragging - FIXED with larger threshold
-                for (let i = 0; i < depthEdge.points.length; i++) {
-                    if (isPointNearPoint({ x, y }, depthEdge.points[i], 12)) {
-                        isDraggingVertex = true;
-                        draggedVertexIndex = i;
-                        draggedElementType = 'depthEdge';
-                        draggedElementIndex = selectedDepthEdgeIndex;
-                        canvas.style.cursor = 'pointer';
-                        saveState();
-                        console.log(`Starting to drag depth edge area vertex ${i}`);
                         return;
                     }
                 }
             }
         }
-        
-        // Check for sill resize handles
-        if (selectedSillIndex !== -1 && sills[selectedSillIndex]) {
-            const sill = sills[selectedSillIndex];
-            
-            if (isPointNearPoint({ x, y }, sill.points[0], 8)) {
-                isResizingSill = true;
-                resizingEndpoint = 'start';
-                canvas.style.cursor = 'pointer';
-                saveState();
-                return;
-            }
-            
-            if (isPointNearPoint({ x, y }, sill.points[1], 8)) {
-                isResizingSill = true;
-                resizingEndpoint = 'end';
-                canvas.style.cursor = 'pointer';
-                saveState();
-                return;
-            }
-        }
-
-        // NEW: Multi-select mode - Ctrl/Cmd+Click to toggle area selection
-if (e.ctrlKey || e.metaKey) {
-    // Check if clicking on any area
-    for (let i = 0; i < areas.length; i++) {
-        if (areas[i] && !areas[i].isCutout && isPointInPolygon({ x, y }, areas[i].points)) {
-            // Toggle multi-selection for this area
-            areas[i].multiSelected = !areas[i].multiSelected;
-            
-            // Also make this the selectedAreaIndex
-            selectedAreaIndex = i;
-            updateAreasList();
-            enableMainAreaControls(areas[i]);
-            drawCanvas();
-            
-            const count = areas.filter(a => a && a.multiSelected).length;
-            showMessage(`${count} area(s) selected for material change`);
-            return;
-        }
-    }
-}
-        
-        // Element dragging logic
-        if (selectedAreaIndex !== -1 && areas[selectedAreaIndex]) {
-            if (isPointInPolygon({ x, y }, areas[selectedAreaIndex].points)) {
-                isDragging = true;
-                draggedElementType = 'area';
-                draggedElementIndex = selectedAreaIndex;
-                dragStartX = x;
-                dragStartY = y;
-                dragElementStartPoints = [...areas[selectedAreaIndex].points];
-                canvas.style.cursor = 'move';
-                saveState();
-            }
-        } else if (selectedDepthEdgeIndex !== -1 && depthEdges[selectedDepthEdgeIndex]) {
-            const depthEdge = depthEdges[selectedDepthEdgeIndex];
-            
-            if (depthEdge.mode === 'line' && depthEdge.points.length === 2) {
-                // Line dragging
-                if (isPointNearLine({ x, y }, depthEdge.points[0], depthEdge.points[1], 20)) {
-                    isDragging = true;
-                    draggedElementType = 'depthEdge';
-                    draggedElementIndex = selectedDepthEdgeIndex;
-                    dragStartX = x;
-                    dragStartY = y;
-                    dragElementStartPoints = [...depthEdge.points];
-                    canvas.style.cursor = 'move';
-                    saveState();
-                }
-            } else if (depthEdge.mode === 'area' && depthEdge.points.length >= 3) {
-                // Area dragging
-                if (isPointInPolygon({ x, y }, depthEdge.points)) {
-                    isDragging = true;
-                    draggedElementType = 'depthEdge';
-                    draggedElementIndex = selectedDepthEdgeIndex;
-                    dragStartX = x;
-                    dragStartY = y;
-                    dragElementStartPoints = [...depthEdge.points];
-                    canvas.style.cursor = 'move';
-                    saveState();
-                }
-            }
-        } else if (selectedSillIndex !== -1 && sills[selectedSillIndex]) {
-            if (isPointNearLine({ x, y }, sills[selectedSillIndex].points[0], sills[selectedSillIndex].points[1], 20)) {
-                isDragging = true;
-                draggedElementType = 'sill';
-                draggedElementIndex = selectedSillIndex;
-                dragStartX = x;
-                dragStartY = y;
-                dragElementStartPoints = [...sills[selectedSillIndex].points];
-                canvas.style.cursor = 'move';
-                saveState();
-            }
-        } else if (selectedBrickRowIndex !== -1 && brickRows[selectedBrickRowIndex]) {
-            // FIXED: Use same polygon detection as selection for dragging
-            const brickRow = brickRows[selectedBrickRowIndex];
-            const start = brickRow.points[0];
-            const end = brickRow.points[1];
-            const height = brickRow.height || brickRowHeight;
-            const scale = scaleToBrickSize(brickRow.scale || GLOBAL_STONE_SCALE);
-            const scaledHeight = height * scale;
-            
-            // Calculate direction and perpendicular
-            const dx = end.x - start.x;
-            const dy = end.y - start.y;
-            const length = Math.sqrt(dx * dx + dy * dy);
-            const dirX = dx / length;
-            const dirY = dy / length;
-            const perpX = -dirY;
-            const perpY = dirX;
-            
-            // Create the brick row rectangle points
-            const brickRowPolygon = [
-                { x: start.x, y: start.y },
-                { x: end.x, y: end.y },
-                { x: end.x + perpX * scaledHeight, y: end.y + perpY * scaledHeight },
-                { x: start.x + perpX * scaledHeight, y: start.y + perpY * scaledHeight }
-            ];
-            
-            // Check if click point is inside the brick row rectangle for dragging
-            if (isPointInPolygon({ x, y }, brickRowPolygon)) {
-                isDragging = true;
-                draggedElementType = 'brickRow';
-                draggedElementIndex = selectedBrickRowIndex;
-                dragStartX = x;
-                dragStartY = y;
-                dragElementStartPoints = [...brickRows[selectedBrickRowIndex].points];
-                canvas.style.cursor = 'move';
-                saveState();
-            }
-
-        } else if (selectedDecorationIndex !== -1 && decorations[selectedDecorationIndex]) {
-            const decoration = decorations[selectedDecorationIndex];
-            const img = decorationImages[decoration.image];
-            if (img) {
-                const size = (decoration.size || 100) / 100;
-                const width = img.width * size;
-                const height = img.height * size;
-                
-                const dx = x - decoration.x;
-                const dy = y - decoration.y;
-                const rotation = -(decoration.rotation || 0) * Math.PI / 180;
-                const cos = Math.cos(rotation);
-                const sin = Math.sin(rotation);
-                const localX = dx * cos - dy * sin;
-                const localY = dx * sin + dy * cos;
-                
-                // Only allow center dragging if not near corners and not already resizing
-                if (Math.abs(localX) <= width/2 && Math.abs(localY) <= height/2 && !isResizingDecoration) {
-                    isDragging = true;
-                    draggedElementType = 'decoration';
-                    draggedElementIndex = selectedDecorationIndex;
-                    dragStartX = x;
-                    dragStartY = y;
-                    dragElementStartPoints = [{ x: decoration.x, y: decoration.y }];
-                    canvas.style.cursor = 'move';
-                    saveState();
-                }
-            }
-        } else if (selectedAccentIndex !== -1 && accents[selectedAccentIndex]) {
-            const accent = accents[selectedAccentIndex];
-            
-            if (accent.type === 'strip-flashing' && accent.points.length >= 2) {
-                const thickness = accent.thickness || 2;
-                if (isPointNearLine({ x, y }, accent.points[0], accent.points[1], thickness + 15)) {
-                    isDragging = true;
-                    draggedElementType = 'accent';
-                    draggedElementIndex = selectedAccentIndex;
-                    dragStartX = x;
-                    dragStartY = y;
-                    dragElementStartPoints = [...accent.points];
-                    canvas.style.cursor = 'move';
-                    saveState();
-                }
-            }
-        }
     });
 
-    // Mouse move for dragging and decoration resizing - FIXED
+    // --- MOUSE MOVE ---
     canvas.addEventListener('mousemove', function(e) {
         const coords = getCanvasCoordinates(e);
-const x = coords.x;
-const y = coords.y;
-
+        const x = coords.x;
+        const y = coords.y;
         lastMousePosition = { x, y };
 
-        // Handle quad corner dragging
         if (isDraggingQuadCorner && draggingQuadCornerIndex !== -1) {
-            currentQuadPoints[draggingQuadCornerIndex] = { x, y };
+            if (isEditingExistingQuad && selectedAreaIndex !== -1) {
+                // Update quad distortion points
+                areas[selectedAreaIndex].quadDistortion.points[draggingQuadCornerIndex] = { x, y };
 
-            // Apply distortion in real-time if we have 4 points and a target area
-            if (currentQuadPoints.length === 4) {
-                applyQuadDistortionRealtime();
-            }
+                // CRITICAL: DO NOT update originalPoints - they must stay fixed as the texture source
+                // Only update area.points (the bounding box) for hit testing and selection purposes
+                const qPoints = areas[selectedAreaIndex].quadDistortion.points;
+                const bounds = {
+                    minX: Math.min(qPoints[0].x, qPoints[1].x, qPoints[2].x, qPoints[3].x),
+                    maxX: Math.max(qPoints[0].x, qPoints[1].x, qPoints[2].x, qPoints[3].x),
+                    minY: Math.min(qPoints[0].y, qPoints[1].y, qPoints[2].y, qPoints[3].y),
+                    maxY: Math.max(qPoints[0].y, qPoints[1].y, qPoints[2].y, qPoints[3].y)
+                };
 
-            drawCanvas();
-            return;
-        }
+                // Update the rectangle points (area.points) for hit testing only
+                areas[selectedAreaIndex].points = [
+                    { x: bounds.minX, y: bounds.minY },
+                    { x: bounds.maxX, y: bounds.minY },
+                    { x: bounds.maxX, y: bounds.maxY },
+                    { x: bounds.minX, y: bounds.maxY }
+                ];
 
-        // Update cursor when hovering over quad corners
-        if (isDrawingQuadDistortion && currentQuadPoints.length > 0) {
-            const cornerIndex = getQuadCornerAtPoint(x, y);
-            if (cornerIndex !== -1) {
-                canvas.style.cursor = 'move';
+                // Invalidate cache so texture regenerates with new quad shape
+                areas[selectedAreaIndex].quadDistortion.capturedCanvas = null;
             } else {
-                canvas.style.cursor = 'crosshair';
+                currentQuadPoints[draggingQuadCornerIndex] = { x, y };
+                if (currentQuadPoints.length === 4) applyQuadDistortionRealtime();
             }
+            drawCanvas();
+            return;
         }
 
-        // Check for button/panel hover in material selector mode
-        if (isMaterialSelectorMode) {
-            let newHoverState = { panelIndex: -1, buttonType: null, buttonIndex: -1 };
-            let overButton = false;
+        if (isDraggingVertex) {
+             if (draggedElementType === 'area' && areas[draggedElementIndex]) {
+                 // CRITICAL: For cutouts on distorted areas, transform mouse position to original space
+                 let newPoint = { x, y };
+                 if (window.dragParentQuadInfo) {
+                     newPoint = inversePerspectiveTransform(
+                         { x, y },
+                         window.dragParentQuadInfo.quadPoints,
+                         window.dragParentQuadInfo.originalPoints
+                     );
+                 }
 
-            // Check remove buttons
-            for (let i = 0; i < materialSelectorRemoveButtons.length; i++) {
-                const btn = materialSelectorRemoveButtons[i];
-                const dist = Math.sqrt(Math.pow(x - btn.x, 2) + Math.pow(y - btn.y, 2));
-                if (dist <= btn.radius + 4) { // Slightly larger hit area
-                    newHoverState = { panelIndex: btn.materialIndex, buttonType: 'remove', buttonIndex: i };
-                    overButton = true;
-                    break;
-                }
-            }
+                 // Calculate delta from the start position
+                 const deltaX = newPoint.x - draggedVertexStartPos.x;
+                 const deltaY = newPoint.y - draggedVertexStartPos.y;
 
-            // Check favorite buttons
-            if (!overButton) {
-                for (let i = 0; i < materialSelectorFavoriteButtons.length; i++) {
-                    const btn = materialSelectorFavoriteButtons[i];
-                    const dist = Math.sqrt(Math.pow(x - btn.x, 2) + Math.pow(y - btn.y, 2));
-                    if (dist <= btn.radius + 4) {
-                        newHoverState = { panelIndex: btn.materialIndex, buttonType: 'favorite', buttonIndex: i };
-                        overButton = true;
-                        break;
-                    }
-                }
-            }
+                 // Update the vertex in ORIGINAL space
+                 areas[draggedElementIndex].points[draggedVertexIndex] = newPoint;
 
-            // Check info buttons
-            if (!overButton) {
-                for (let i = 0; i < materialSelectorInfoButtons.length; i++) {
-                    const btn = materialSelectorInfoButtons[i];
-                    if (x >= btn.x - btn.width/2 - 4 && x <= btn.x + btn.width/2 + 4 &&
-                        y >= btn.y - btn.height/2 - 4 && y <= btn.y + btn.height/2 + 4) {
-                        newHoverState = { panelIndex: btn.materialIndex, buttonType: 'info', buttonIndex: i };
-                        overButton = true;
-                        break;
-                    }
-                }
-            }
+                 // If this area has quad distortion, move ALL quad points by the same delta
+                 // This keeps the distortion in sync with the rectangle movement
+                 if (areas[draggedElementIndex].quadDistortion && areas[draggedElementIndex].quadDistortion.enabled && dragQuadStartPoints.length > 0) {
+                     areas[draggedElementIndex].quadDistortion.points = dragQuadStartPoints.map(p => ({
+                         x: p.x + deltaX,
+                         y: p.y + deltaY
+                     }));
+                 }
 
-            // Check if hovering over any panel (for panel hover effect)
-            if (!overButton && areas.length > 0) {
-                for (let i = 0; i < areas.length; i++) {
-                    const area = areas[i];
-                    if (area && area.points && area.points.length >= 4) {
-                        const minX = Math.min(...area.points.map(p => p.x));
-                        const maxX = Math.max(...area.points.map(p => p.x));
-                        const minY = Math.min(...area.points.map(p => p.y));
-                        const maxY = Math.max(...area.points.map(p => p.y));
-                        if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
-                            newHoverState.panelIndex = area.materialIndex !== undefined ? area.materialIndex : i;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Check if hover state changed - if so, redraw
-            const stateChanged = newHoverState.panelIndex !== materialSelectorHoverState.panelIndex ||
-                                 newHoverState.buttonType !== materialSelectorHoverState.buttonType;
-            materialSelectorHoverState = newHoverState;
-
-            if (stateChanged) {
-                drawCanvas();
-            }
-
-            // Set cursor - pointer for buttons/panels, default otherwise
-            if (overButton || newHoverState.panelIndex >= 0) {
-                canvas.style.cursor = 'pointer';
-            } else {
-                canvas.style.cursor = 'default';
-            }
-        }
-
-      // Handle rectangle drawing preview
-// Handle rectangle drawing preview
-if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint) {
-    drawCanvas();
-    return;
-}
-
-function updatePerspectiveSliders(area) {
-    // Update perspective angle slider
-    const perspectiveSlider = document.getElementById('perspective-angle-slider');
-    const perspectiveValue = document.getElementById('perspective-angle-value');
-    if (perspectiveSlider && perspectiveValue) {
-        perspectiveSlider.value = area.perspectiveAngle || 0;
-        perspectiveValue.textContent = (area.perspectiveAngle || 0) + '°';
-    }
-    
-    // Update perspective compression slider
-    const compressionSlider = document.getElementById('perspective-compression-slider');
-    const compressionValue = document.getElementById('perspective-compression-value');
-    if (compressionSlider && compressionValue) {
-        compressionSlider.value = area.perspectiveCompression || 0;
-        compressionValue.textContent = (area.perspectiveCompression || 0) + '%';
-    }
-    
-    // Update 3D angle slider
-    const angle3dSlider = document.getElementById('angle-3d-slider');
-    const angle3dValue = document.getElementById('angle-3d-value');
-    if (angle3dSlider && angle3dValue) {
-        angle3dSlider.value = area.angle3d || 0;
-        angle3dValue.textContent = (area.angle3d || 0) + '°';
-    }
-}
-    
-        
-        // Handle decoration resizing - FIXED
-        if (isResizingDecoration && selectedDecorationIndex !== -1 && decorations[selectedDecorationIndex]) {
-            const decoration = decorations[selectedDecorationIndex];
-            const img = decorationImages[decoration.image];
-            if (img) {
-                // Calculate distance from decoration center to current mouse position
-                const centerX = decoration.x;
-                const centerY = decoration.y;
-                const currentDistance = Math.sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY));
-                
-                // Calculate distance from decoration center to initial mouse position
-                const initialDistance = Math.sqrt(
-                    (decorationResizeStartMouse.x - centerX) * (decorationResizeStartMouse.x - centerX) + 
-                    (decorationResizeStartMouse.y - centerY) * (decorationResizeStartMouse.y - centerY)
-                );
-                
-                // Calculate scale factor based on distance ratio
-                const scaleFactor = initialDistance > 0 ? currentDistance / initialDistance : 1;
-                
-                // Calculate new size
-                let newSize = decorationResizeStartSize * scaleFactor;
-                newSize = Math.max(10, Math.min(500, newSize)); // Limit size between 10% and 500%
-                
-                decoration.size = newSize;
-                drawCanvas();
-            }
-            return;
-        }
-        
-        // REPLACE your vertex dragging section with this corrected version:
-
-        // Handle vertex dragging
-        if (isDraggingVertex && selectedAreaIndex !== -1 && areas[selectedAreaIndex]) {
-            areas[selectedAreaIndex].points[draggedVertexIndex] = { x, y };
-            drawCanvas();
-            return;
-        } else if (isDraggingVertex && selectedDepthEdgeIndex !== -1 && depthEdges[selectedDepthEdgeIndex] && draggedElementType === 'depthEdge') {
-            depthEdges[selectedDepthEdgeIndex].points[draggedVertexIndex] = { x, y };
-            drawCanvas();
-            return;
-        } else if (isDraggingVertex && selectedAccentIndex !== -1 && accents[selectedAccentIndex] && draggedElementType === 'accent') {
-            console.log(`Dragging accent endpoint ${draggedVertexIndex} to`, { x, y });
-            accents[selectedAccentIndex].points[draggedVertexIndex] = { x, y };
-            drawCanvas();
-            return;
-        } else if (isDraggingVertex && selectedBrickRowIndex !== -1 && brickRows[selectedBrickRowIndex] && draggedElementType === 'brickRow') {
-            brickRows[selectedBrickRowIndex].points[draggedVertexIndex] = { x, y };
-            drawCanvas();
-            return;
+                 // Invalidate parent quad cache when cutout is dragged
+                 if (window.dragParentQuadInfo && areas[draggedElementIndex].isCutout && areas[draggedElementIndex].parentId) {
+                     const parentArea = areas.find(a => a && a.id === areas[draggedElementIndex].parentId);
+                     if (parentArea && parentArea.quadDistortion) {
+                         parentArea.quadDistortion.capturedCanvas = null;
+                     }
+                 }
+             } else if (draggedElementType === 'accent' && accents[draggedElementIndex]) {
+                 accents[draggedElementIndex].points[draggedVertexIndex] = { x, y };
+             } else if (draggedElementType === 'depthEdge' && depthEdges[draggedElementIndex]) {
+                 depthEdges[draggedElementIndex].points[draggedVertexIndex] = { x, y };
+             }
+             drawCanvas();
+             return;
         }
         
         if (isDragging) {
-            const deltaX = x - dragStartX;
-            const deltaY = y - dragStartY;
-            
-            if (draggedElementType === 'area' && areas[draggedElementIndex]) {
-                areas[draggedElementIndex].points = dragElementStartPoints.map(point => ({
-                    x: point.x + deltaX,
-                    y: point.y + deltaY
-                }));
-                drawCanvas();
-            } else if (draggedElementType === 'depthEdge' && depthEdges[draggedElementIndex]) {
-                depthEdges[draggedElementIndex].points = dragElementStartPoints.map(point => ({
-                    x: point.x + deltaX,
-                    y: point.y + deltaY
-                }));
-                drawCanvas();
-            } else if (draggedElementType === 'sill' && sills[draggedElementIndex]) {
-                sills[draggedElementIndex].points = dragElementStartPoints.map(point => ({
-                    x: point.x + deltaX,
-                    y: point.y + deltaY
-                }));
-                drawCanvas();
-            } else if (draggedElementType === 'brickRow' && brickRows[draggedElementIndex]) {
-                brickRows[draggedElementIndex].points = dragElementStartPoints.map(point => ({
-                    x: point.x + deltaX,
-                    y: point.y + deltaY
-                }));
-                drawCanvas();
-            } else if (draggedElementType === 'decoration' && decorations[draggedElementIndex]) {
-                decorations[draggedElementIndex].x = dragElementStartPoints[0].x + deltaX;
-                decorations[draggedElementIndex].y = dragElementStartPoints[0].y + deltaY;
-                drawCanvas();
-            } else if (draggedElementType === 'accent' && accents[draggedElementIndex]) {
-                accents[draggedElementIndex].points = dragElementStartPoints.map(point => ({
-                    x: point.x + deltaX,
-                    y: point.y + deltaY
-                }));
-                drawCanvas();
+            // CRITICAL: Calculate delta in the correct space
+            let deltaX = x - dragStartX;
+            let deltaY = y - dragStartY;
+
+            // For cutouts on distorted areas, transform delta to original space
+            if (window.dragParentQuadInfo) {
+                const startOriginal = inversePerspectiveTransform(
+                    { x: dragStartX, y: dragStartY },
+                    window.dragParentQuadInfo.quadPoints,
+                    window.dragParentQuadInfo.originalPoints
+                );
+                const currentOriginal = inversePerspectiveTransform(
+                    { x, y },
+                    window.dragParentQuadInfo.quadPoints,
+                    window.dragParentQuadInfo.originalPoints
+                );
+                deltaX = currentOriginal.x - startOriginal.x;
+                deltaY = currentOriginal.y - startOriginal.y;
             }
-        } else if (isInDrawingMode) {
-            drawCanvas();
-        } else {
-            // Change cursor when hovering over decorations and their handles
-            let hoveringOverDecoration = false;
-            let hoveringOverResizeHandle = false;
-            
-            for (let i = decorations.length - 1; i >= 0; i--) {
-                const decoration = decorations[i];
-                if (decoration && decorationImages[decoration.image]) {
-                    const img = decorationImages[decoration.image];
-                    const size = (decoration.size || 100) / 100;
-                    const width = img.width * size;
-                    const height = img.height * size;
-                    
-                    const dx = x - decoration.x;
-                    const dy = y - decoration.y;
-                    const rotation = -(decoration.rotation || 0) * Math.PI / 180;
-                    const cos = Math.cos(rotation);
-                    const sin = Math.sin(rotation);
-                    const localX = dx * cos - dy * sin;
-                    const localY = dx * sin + dy * cos;
-                    
-                    if (Math.abs(localX) <= width/2 && Math.abs(localY) <= height/2) {
-                        hoveringOverDecoration = true;
-                        
-                        // Check if hovering over resize handles for selected decoration
-                        if (i === selectedDecorationIndex) {
-                            const resizeHandle = getDecorationResizeHandle(x, y, decoration);
-                            if (resizeHandle) {
-                                hoveringOverResizeHandle = true;
-                                canvas.style.cursor = getResizeCursor(resizeHandle);
-                                break;
-                            }
-                        }
-                        break;
+
+            if (draggedElementType === 'area' && areas[draggedElementIndex]) {
+                areas[draggedElementIndex].points = dragElementStartPoints.map(p => ({
+                    x: p.x + deltaX,
+                    y: p.y + deltaY
+                }));
+
+                // SYNC: If this area has quad distortion, move those points too using the STORED start points
+                if (areas[draggedElementIndex].quadDistortion && areas[draggedElementIndex].quadDistortion.enabled && dragQuadStartPoints.length > 0) {
+                    areas[draggedElementIndex].quadDistortion.points = dragQuadStartPoints.map(p => ({
+                        x: p.x + deltaX,
+                        y: p.y + deltaY
+                    }));
+                }
+
+                // Invalidate parent quad cache when cutout is dragged
+                if (window.dragParentQuadInfo && areas[draggedElementIndex].isCutout && areas[draggedElementIndex].parentId) {
+                    const parentArea = areas.find(a => a && a.id === areas[draggedElementIndex].parentId);
+                    if (parentArea && parentArea.quadDistortion) {
+                        parentArea.quadDistortion.capturedCanvas = null;
                     }
                 }
+            } else if (draggedElementType === 'decoration' && decorations[draggedElementIndex]) {
+                 decorations[draggedElementIndex].x = dragElementStartPoints[0].x + deltaX;
+                 decorations[draggedElementIndex].y = dragElementStartPoints[0].y + deltaY;
+            } else if (draggedElementType === 'depthEdge' && depthEdges[draggedElementIndex]) {
+                 depthEdges[draggedElementIndex].points = dragElementStartPoints.map(p => ({
+                     x: p.x + deltaX,
+                     y: p.y + deltaY
+                 }));
             }
-            
-            // Set appropriate cursor
-            if (hoveringOverResizeHandle) {
-                // Cursor already set above
-            } else if (hoveringOverDecoration) {
-                canvas.style.cursor = 'move';
-            } else {
-                canvas.style.cursor = 'crosshair';
-            }
+            drawCanvas();
+            return;
         }
-    });
-
-    // Mouse up to end dragging and resizing - FIXED
-    canvas.addEventListener('mouseup', function(e) {
-        // Handle quad corner dragging stop
-        if (isDraggingQuadCorner) {
-            isDraggingQuadCorner = false;
-            draggingQuadCornerIndex = -1;
-            canvas.style.cursor = 'crosshair';
+        
+        if (isResizingDecoration && selectedDecorationIndex !== -1) {
+            const decoration = decorations[selectedDecorationIndex];
+            const centerX = decoration.x;
+            const centerY = decoration.y;
+            const currentDistance = Math.sqrt((x - centerX)**2 + (y - centerY)**2);
+            const initialDistance = Math.sqrt((decorationResizeStartMouse.x - centerX)**2 + (decorationResizeStartMouse.y - centerY)**2);
+            const scaleFactor = initialDistance > 0 ? currentDistance / initialDistance : 1;
+            let newSize = decorationResizeStartSize * scaleFactor;
+            newSize = Math.max(10, Math.min(500, newSize));
+            decoration.size = newSize;
             drawCanvas();
             return;
         }
 
-      // Handle rectangle drawing preview
-// Handle rectangle drawing completion
-if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint) {
-    const coords = getCanvasCoordinates(e);
-const x = coords.x;
-const y = coords.y;
-    
-    // Create rectangle points
-    const minX = Math.min(rectangleStartPoint.x, x);
-    const maxX = Math.max(rectangleStartPoint.x, x);
-    const minY = Math.min(rectangleStartPoint.y, y);
-    const maxY = Math.max(rectangleStartPoint.y, y);
-    
-    currentPoints = [
-        { x: minX, y: minY },
-        { x: maxX, y: minY },
-        { x: maxX, y: maxY },
-        { x: minX, y: maxY }
-    ];
-    
-    rectangleStartPoint = null;
-    finishDrawingArea();
-    return;
-}
-        if (isDraggingVertex) {
-            isDraggingVertex = false;
-            draggedVertexIndex = -1;
-            canvas.style.cursor = 'crosshair';
-            showMessage('Vertex moved.');
-        } else if (isResizingDepthEdge) {
-            isResizingDepthEdge = false;
-            resizingEndpoint = null;
-            canvas.style.cursor = 'crosshair';
-            showMessage('Depth edge resized.');
-        } else if (isResizingDecoration) {
-            isResizingDecoration = false;
-            decorationResizeHandle = null;
-            canvas.style.cursor = 'crosshair';
-            showMessage('Decoration resized.');
-        } else if (isResizingSill) {
-            isResizingSill = false;
-            resizingEndpoint = null;
-            canvas.style.cursor = 'crosshair';
-            showMessage('Sill resized.');
-        } else if (isDragging) {
-            isDragging = false;
-            draggedElementType = null;
-            draggedElementIndex = -1;
-            canvas.style.cursor = 'crosshair';
-            showMessage('Element moved.');
+        if (isDrawingArea || isDrawingDepthEdge || isDrawingSill || isDrawingAccent || isDrawingQuadDistortion) { 
+            drawCanvas(); 
+        } else {
+            if (isDrawingQuadDistortion) {
+                 if (getQuadCornerAtPoint(x,y) !== -1) canvas.style.cursor = 'move';
+                 else canvas.style.cursor = 'crosshair';
+            }
         }
     });
 
+    // --- MOUSE UP ---
+    canvas.addEventListener('mouseup', function(e) {
+        if (isDraggingQuadCorner) {
+            // Clear the texture cache since the quad shape changed
+            if (selectedAreaIndex !== -1 && areas[selectedAreaIndex] && areas[selectedAreaIndex].quadDistortion) {
+                areas[selectedAreaIndex].quadDistortion.capturedCanvas = null;
+            }
+
+            isDraggingQuadCorner = false;
+            draggingQuadCornerIndex = -1;
+            isEditingExistingQuad = false;
+            canvas.style.cursor = 'crosshair';
+            drawCanvas();
+            return;
+        }
+        
+        if (isDrawingArea && areaDrawingMode === 'rectangle' && rectangleStartPoint) {
+             const coords = getCanvasCoordinates(e);
+             const minX = Math.min(rectangleStartPoint.x, coords.x);
+             const maxX = Math.max(rectangleStartPoint.x, coords.x);
+             const minY = Math.min(rectangleStartPoint.y, coords.y);
+             const maxY = Math.max(rectangleStartPoint.y, coords.y);
+             currentPoints = [{x:minX, y:minY}, {x:maxX, y:minY}, {x:maxX, y:maxY}, {x:minX, y:maxY}];
+             rectangleStartPoint = null;
+             finishDrawingArea();
+             return;
+        }
+        
+        if (isDragging) { isDragging = false; showMessage('Moved'); }
+        if (isDraggingVertex) { isDraggingVertex = false; showMessage('Vertex moved'); }
+        if (isResizingDecoration) { isResizingDecoration = false; showMessage('Resized'); }
+    });
+
+    // --- KEY DOWN ---
     document.addEventListener('keydown', function(e) {
-        // Handle Enter key for applying quad distortion
         if (e.key === 'Enter' && isDrawingQuadDistortion && currentQuadPoints.length === 4) {
             applyQuadDistortion();
             return;
         }
-
-        if (e.key === 'Escape') {
-            if (isDragging) {
-                isDragging = false;
-                draggedElementType = null;
-                draggedElementIndex = -1;
-                canvas.style.cursor = 'crosshair';
-                if (draggedElementType === 'area' && areas[draggedElementIndex]) {
-                    areas[draggedElementIndex].points = dragElementStartPoints;
-                } else if (draggedElementType === 'depthEdge' && depthEdges[draggedElementIndex]) {
-                    depthEdges[draggedElementIndex].points = dragElementStartPoints;
-                } else if (draggedElementType === 'sill' && sills[draggedElementIndex]) {
-                    sills[draggedElementIndex].points = dragElementStartPoints;
-                } else if (draggedElementType === 'brickRow' && brickRows[draggedElementIndex]) {
-                    brickRows[draggedElementIndex].points = dragElementStartPoints;
-                } else if (draggedElementType === 'decoration' && decorations[draggedElementIndex]) {
-                    decorations[draggedElementIndex].x = dragElementStartPoints[0].x;
-                    decorations[draggedElementIndex].y = dragElementStartPoints[0].y;
-                }
-                drawCanvas();
-                showMessage('Move cancelled.');
-            } else if (isDraggingVertex) {
-                isDraggingVertex = false;
-                draggedVertexIndex = -1;
-                canvas.style.cursor = 'crosshair';
-                undo();
-                showMessage('Vertex move cancelled.');
-            } else if (isResizingDepthEdge) {
-                isResizingDepthEdge = false;
-                resizingEndpoint = null;
-                canvas.style.cursor = 'crosshair';
-                undo();
-                showMessage('Depth edge resize cancelled.');
-            } else if (isResizingDecoration) {
-                isResizingDecoration = false;
-                decorationResizeHandle = null;
-                canvas.style.cursor = 'crosshair';
-                undo();
-                showMessage('Decoration resize cancelled.');
-            } else if (isAddingDecoration) {
-                isAddingDecoration = false;
-                isInDrawingMode = false;
-                canvas.style.cursor = 'crosshair';
-                showMessage('Decoration placement cancelled.');
-            } else if (isDrawingArea && currentPoints.length >= 3) {
-                finishDrawingArea();
-            } else if (isDrawingDepthEdge && depthEdgeMode === 'area' && currentDepthEdgePoints.length >= 3) {
-                finishDrawingDepthArea();
-            } else {
-                isDrawingArea = false;
-                isDrawingSill = false;
-                isDrawingBrickRow = false;
-                isDrawingDepthEdge = false;
-                isInDrawingMode = false;
-                currentPoints = [];
-                currentSillPoints = [];
-                currentBrickRowPoints = [];
-                currentDepthEdgePoints = [];
-                showMessage('Drawing cancelled.');
-                drawCanvas();
+        
+        if (e.key === 'Delete') {
+            if (selectedAnnotation !== null) return; 
+            if (selectedAreaIndex !== -1 || selectedSillIndex !== -1 || selectedDecorationIndex !== -1 || selectedAccentIndex !== -1) {
+                e.preventDefault();
+                deleteSelectedElement();
+                return;
             }
-        } else if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
-            e.preventDefault();
-            undo();
-        } else if (e.ctrlKey && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-            e.preventDefault();
-            redo();
-        } else if (e.ctrlKey && e.key === 'c') {
-            e.preventDefault();
-            copySelectedElement();
-        } else if (e.ctrlKey && e.key === 'v') {
-            e.preventDefault();
-            pasteElement();
-        } else if (e.key === 'Delete') {
-            e.preventDefault();
-            deleteSelectedElement();
         }
+        
+        if (e.key === 'Escape') {
+             if (isDrawingQuadDistortion) {
+                 isDrawingQuadDistortion = false;
+                 currentQuadPoints = [];
+                 clearAllActiveButtons();
+                 drawCanvas();
+                 showMessage("Quad distortion cancelled");
+             } else if (isDrawingArea || isDrawingSill || isDrawingAccent) {
+                 isDrawingArea = false; isDrawingSill = false; isDrawingAccent = false;
+                 currentPoints = []; currentSillPoints = []; currentAccentPoints = [];
+                 isInDrawingMode = false;
+                 drawCanvas();
+                 showMessage("Drawing cancelled");
+             }
+        }
+        
+        if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+        if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+        if (e.ctrlKey && e.key === 'c') { e.preventDefault(); copySelectedElement(); }
+        if (e.ctrlKey && e.key === 'v') { e.preventDefault(); pasteElement(); }
+    });
+    
+    canvas.addEventListener('dblclick', function(e) {
+         if (isDrawingArea && currentPoints.length >= 3) finishDrawingArea();
+         if (isDrawingAccent && currentAccentPoints.length >= 3) finishDrawingFlatCap();
+         if (isDrawingDepthEdge && currentDepthEdgePoints && currentDepthEdgePoints.length >= 3) finishDrawingDepthArea();
     });
 }
 
