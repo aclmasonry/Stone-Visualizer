@@ -507,65 +507,69 @@ function drawTexturePerspective(ctx, img, points) {
     const p2 = points[2];
     const p3 = points[3];
 
-    // Calculate quad distortion to determine subdivision density
-    // Measure how much the quad deviates from a rectangle
-    const topWidth = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-    const bottomWidth = Math.hypot(p2.x - p3.x, p2.y - p3.y);
+    // 1. Calculate the vertical heights of the left and right edges
+    // This serves as our proxy for "depth" (taller = closer, shorter = farther)
     const leftHeight = Math.hypot(p3.x - p0.x, p3.y - p0.y);
     const rightHeight = Math.hypot(p2.x - p1.x, p2.y - p1.y);
 
-    // Calculate distortion factors
+    // 2. Determine subdivision count based on distortion
+    const topWidth = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+    const bottomWidth = Math.hypot(p2.x - p3.x, p2.y - p3.y);
     const widthRatio = Math.max(topWidth, bottomWidth) / Math.min(topWidth, bottomWidth);
     const heightRatio = Math.max(leftHeight, rightHeight) / Math.min(leftHeight, rightHeight);
     const maxDistortion = Math.max(widthRatio, heightRatio);
 
-    // Increase subdivisions based on distortion (more distortion = more subdivisions)
-    // Base: 80, increases up to 200 for extreme distortion
     const baseSub = 80;
     const maxSub = 200;
-    const distortionFactor = Math.min((maxDistortion - 1) * 2, 1); // 0 to 1
+    const distortionFactor = Math.min((maxDistortion - 1) * 2, 1);
     const subdivisions = Math.round(baseSub + (maxSub - baseSub) * distortionFactor);
 
     const subdivisionsX = subdivisions;
     const subdivisionsY = subdivisions;
 
-    // Perspective-correct texture mapping for horizontal dimension only
-    // Using inverse depth interpolation (1/w interpolation)
-    const perspectiveStrength = 1.0; // Full correction
+    // 3. Calculate Perspective Ratio (R)
+    // For brick walls, perspective shows as height OR width difference
+    // We use whichever indicates more distortion
+    const safeLeftH = Math.max(leftHeight, 1);
+    const safeRightH = Math.max(rightHeight, 1);
+    const safeTopW = Math.max(topWidth, 1);
+    const safeBottomW = Math.max(bottomWidth, 1);
 
-    // Assign depth values based on which edge is wider (closer = depth 1, farther = depth > 1)
-    const maxWidth = Math.max(topWidth, bottomWidth);
-    const minWidth = Math.min(topWidth, bottomWidth);
-    const depthRatio = maxWidth / minWidth; // How much farther is the narrow edge?
+    const perspectiveHeightRatio = Math.min(safeLeftH, safeRightH) / Math.max(safeLeftH, safeRightH);
+    const perspectiveWidthRatio = Math.min(safeTopW, safeBottomW) / Math.max(safeTopW, safeBottomW);
 
-    // Determine which edge is closer
-    let topDepth, bottomDepth;
-    if (topWidth > bottomWidth) {
-        // Top is closer (wider)
-        topDepth = 1.0;
-        bottomDepth = depthRatio;
-    } else {
-        // Bottom is closer (wider)
-        topDepth = depthRatio;
-        bottomDepth = 1.0;
-    }
+    // Use whichever ratio is smaller (indicates more distortion)
+    const rawPerspectiveRatio = Math.min(perspectiveHeightRatio, perspectiveWidthRatio);
+
+    // Apply strength control
+    const perspectiveStrength = 1.0;
+
+    // Blend between no correction (1.0) and full correction (rawPerspectiveRatio)
+    const perspectiveRatio = 1.0 + (rawPerspectiveRatio - 1.0) * perspectiveStrength;
 
     for (let row = 0; row < subdivisionsY; row++) {
         for (let col = 0; col < subdivisionsX; col++) {
-            // SIMPLE LINEAR MAPPING - No perspective correction for now
-            // This establishes the baseline
+
+            // --- SCREEN COORDINATES (Linear) ---
+            // We step through the SCREEN uniformly
             const u_screen = col / subdivisionsX;
             const u_screen_next = (col + 1) / subdivisionsX;
             const v_screen = row / subdivisionsY;
             const v_screen_next = (row + 1) / subdivisionsY;
 
-            // Texture coordinates match screen coordinates
-            const u_tex = u_screen;
-            const u_tex_next = u_screen_next;
-            const v_tex = v_screen;
+            // --- TEXTURE COORDINATES (Projective / Non-Linear) ---
+            // We map the linear screen step to a non-linear texture position
+            // Formula: t = s / (R + (1-R)*s)
+            // With R < 1, this samples MORE texture at the far end (compressed bricks)
+
+            const u_tex = u_screen / (perspectiveRatio + (1 - perspectiveRatio) * u_screen);
+            const u_tex_next = u_screen_next / (perspectiveRatio + (1 - perspectiveRatio) * u_screen_next);
+
+            const v_tex = v_screen; // Keep vertical linear for wall segments
             const v_tex_next = v_screen_next;
 
-            // Bilinear interpolation for screen positions using perspective-corrected coordinates
+            // Calculate geometrical points on screen using the NON-LINEAR u_screen values
+            // This creates "Wide" trapezoids on the tall side and "Narrow" trapezoids on the short side
             const topLeft = {
                 x: (1 - v_screen) * ((1 - u_screen) * p0.x + u_screen * p1.x) + v_screen * ((1 - u_screen) * p3.x + u_screen * p2.x),
                 y: (1 - v_screen) * ((1 - u_screen) * p0.y + u_screen * p1.y) + v_screen * ((1 - u_screen) * p3.y + u_screen * p2.y)
@@ -583,21 +587,20 @@ function drawTexturePerspective(ctx, img, points) {
                 y: (1 - v_screen_next) * ((1 - u_screen) * p0.y + u_screen * p1.y) + v_screen_next * ((1 - u_screen) * p3.y + u_screen * p2.y)
             };
 
-            // Map texture coordinates directly to pixels (uniform distribution)
+            // Calculate source rectangle from the image (using the Linear texture coords)
             const sx = u_tex * img.width;
             const sy = v_tex * img.height;
             const sw = (u_tex_next - u_tex) * img.width;
             const sh = (v_tex_next - v_tex) * img.height;
 
-            // Draw this quad cell using transform
+            // Draw this quad cell
             ctx.save();
-            ctx.globalAlpha = 1.0; // Force full opacity
-            ctx.globalCompositeOperation = 'source-over'; // Normal blending
-
-            // Keep image smoothing enabled for quality
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'source-over';
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
 
+            // Clip to the destination trapezoid
             ctx.beginPath();
             ctx.moveTo(topLeft.x, topLeft.y);
             ctx.lineTo(topRight.x, topRight.y);
@@ -606,7 +609,8 @@ function drawTexturePerspective(ctx, img, points) {
             ctx.closePath();
             ctx.clip();
 
-            // Calculate transform matrix for this quad cell
+            // Use affine transform to map the image slice into the trapezoid
+            // Since our slices are small (subdivisions), the error between affine and projective is negligible here
             const dx1 = topRight.x - topLeft.x;
             const dy1 = topRight.y - topLeft.y;
             const dx2 = bottomLeft.x - topLeft.x;
@@ -618,10 +622,12 @@ function drawTexturePerspective(ctx, img, points) {
                 topLeft.x, topLeft.y
             );
 
-            // Draw with significant overlap to prevent gaps - critical for extreme angles
-            const overlap = 1.5;
-            ctx.drawImage(img, sx - overlap, sy - overlap, sw + overlap * 2, sh + overlap * 2,
-                         -overlap, -overlap, sw + overlap * 2, sh + overlap * 2);
+            // Draw with slight overlap to prevent seams
+            const overlap = 1.0;
+            ctx.drawImage(img,
+                sx, sy, sw, sh,
+                -overlap, -overlap, sw + overlap * 2, sh + overlap * 2
+            );
             ctx.restore();
         }
     }
